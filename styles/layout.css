@@ -1,0 +1,60 @@
+/* Page skeleton: wrapper, header, two-column split, sticky sidebar. */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+
+.top{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding-bottom:14px;margin-bottom:20px;border-bottom:1px solid var(--line);
+}
+.top h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-0.01em}
+.top .sub{color:var(--muted);font-size:13.5px}
+.top .file-tag{
+  font-family:var(--mono);font-size:12.5px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:3px 9px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.top .file-tag.hidden{display:none}
+.top .lang{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.top .lang button{
+  border:0;background:var(--panel);color:var(--muted);font-family:var(--mono);
+  font-size:12px;padding:4px 10px;letter-spacing:0.03em;
+}
+.top .lang button.on{background:var(--ink);color:var(--on-ink)}
+.top .theme{display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.top .theme button{
+  border:0;background:var(--panel);color:var(--muted);font-size:12px;padding:4px 9px;
+}
+.top .theme button.on{background:var(--ink);color:var(--on-ink)}
+
+.app{display:none}
+.app.on{display:block}
+
+/* tab strip */
+.tabs{display:flex;align-items:center;gap:4px;margin-bottom:var(--gap);border-bottom:1px solid var(--line)}
+.tab-btn{
+  border:0;background:none;padding:8px 14px;margin-bottom:-1px;
+  font-size:14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;
+}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.on{color:var(--ink);border-bottom-color:var(--keep)}
+.tab-aside{margin-left:auto;margin-bottom:6px}
+
+.tab-panel{display:none}
+.tab-panel.on{display:block}
+
+/* export tab keeps the two-column split */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;align-items:start}
+.side{display:flex;flex-direction:column;gap:var(--gap);position:sticky;top:16px}
+
+@media (max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .side{position:static}
+  .top .lang{margin-left:0}
+  .top .theme{margin-left:0}
+  .tabs{overflow-x:auto}
+}

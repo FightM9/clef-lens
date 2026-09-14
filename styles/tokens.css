@@ -1,0 +1,106 @@
+/* Design tokens.
+
+   Palettes are declared once as --l-* (light) and --d-* (dark); the two
+   mapping blocks below just point the working tokens at one of them.
+   Add a colour to both palettes and map it once. */
+:root{
+  /* light palette */
+  --l-bg:#EEF1F0;
+  --l-panel:#FFFFFF;
+  --l-ink:#16282C;
+  --l-ink-hover:#0D1D20;
+  --l-on-ink:#FFFFFF;
+  --l-muted:#606F73;
+  --l-faint:#818D8F;
+  --l-line:#D6DEDC;
+  --l-line-soft:#E7ECEB;
+  --l-keep:#0E6B60;
+  --l-keep-soft:#E2F0EE;
+  --l-drop:#9C2F3E;
+
+  /* dark palette */
+  --d-bg:#111A1C;
+  --d-panel:#182225;
+  --d-ink:#E3EBE9;
+  --d-ink-hover:#CBD8D5;
+  --d-on-ink:#0E1618;
+  --d-muted:#93A4A7;
+  --d-faint:#64777A;
+  --d-line:#2B383B;
+  --d-line-soft:#212D30;
+  --d-keep:#4FBFAD;
+  --d-keep-soft:#16322E;
+  --d-drop:#E4788B;
+
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+
+  --radius:10px;
+  --radius-sm:6px;
+  --gap:16px;
+}
+
+/* --- light: the default, and whatever data-theme="light" asks for --- */
+:root,
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:var(--l-bg);
+  --panel:var(--l-panel);
+  --ink:var(--l-ink);
+  --ink-hover:var(--l-ink-hover);
+  --on-ink:var(--l-on-ink);
+  --muted:var(--l-muted);
+  --faint:var(--l-faint);
+  --line:var(--l-line);
+  --line-soft:var(--l-line-soft);
+  --keep:var(--l-keep);
+  --keep-soft:var(--l-keep-soft);
+  --drop:var(--l-drop);
+  --lvl-info:#5B8FA8;
+  --lvl-verbose:#C2CBCC;
+  --lvl-warn:#C98A28;
+  --lvl-fatal:#5C1220;
+}
+
+/* --- dark: by the system when nothing is pinned, or by data-theme="dark" --- */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:var(--d-bg);
+    --panel:var(--d-panel);
+    --ink:var(--d-ink);
+    --ink-hover:var(--d-ink-hover);
+    --on-ink:var(--d-on-ink);
+    --muted:var(--d-muted);
+    --faint:var(--d-faint);
+    --line:var(--d-line);
+    --line-soft:var(--d-line-soft);
+    --keep:var(--d-keep);
+    --keep-soft:var(--d-keep-soft);
+    --drop:var(--d-drop);
+    --lvl-info:#7FB3CC;
+    --lvl-verbose:#55666A;
+    --lvl-warn:#E0A748;
+    --lvl-fatal:#C2445C;
+  }
+}
+
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:var(--d-bg);
+  --panel:var(--d-panel);
+  --ink:var(--d-ink);
+  --ink-hover:var(--d-ink-hover);
+  --on-ink:var(--d-on-ink);
+  --muted:var(--d-muted);
+  --faint:var(--d-faint);
+  --line:var(--d-line);
+  --line-soft:var(--d-line-soft);
+  --keep:var(--d-keep);
+  --keep-soft:var(--d-keep-soft);
+  --drop:var(--d-drop);
+  --lvl-info:#7FB3CC;
+  --lvl-verbose:#55666A;
+  --lvl-warn:#E0A748;
+  --lvl-fatal:#C2445C;
+}

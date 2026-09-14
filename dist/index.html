@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clef Lens</title>
+<meta name="description" content="Read, query and trim NDJSON / CLEF log exports entirely in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* styles/tokens.css */
+/* Design tokens.
+
+   Palettes are declared once as --l-* (light) and --d-* (dark); the two
+   mapping blocks below just point the working tokens at one of them.
+   Add a colour to both palettes and map it once. */
+:root{
+  /* light palette */
+  --l-bg:#EEF1F0;
+  --l-panel:#FFFFFF;
+  --l-ink:#16282C;
+  --l-ink-hover:#0D1D20;
+  --l-on-ink:#FFFFFF;
+  --l-muted:#606F73;
+  --l-faint:#818D8F;
+  --l-line:#D6DEDC;
+  --l-line-soft:#E7ECEB;
+  --l-keep:#0E6B60;
+  --l-keep-soft:#E2F0EE;
+  --l-drop:#9C2F3E;
+
+  /* dark palette */
+  --d-bg:#111A1C;
+  --d-panel:#182225;
+  --d-ink:#E3EBE9;
+  --d-ink-hover:#CBD8D5;
+  --d-on-ink:#0E1618;
+  --d-muted:#93A4A7;
+  --d-faint:#64777A;
+  --d-line:#2B383B;
+  --d-line-soft:#212D30;
+  --d-keep:#4FBFAD;
+  --d-keep-soft:#16322E;
+  --d-drop:#E4788B;
+
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+
+  --radius:10px;
+  --radius-sm:6px;
+  --gap:16px;
+}
+
+/* --- light: the default, and whatever data-theme="light" asks for --- */
+:root,
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:var(--l-bg);
+  --panel:var(--l-panel);
+  --ink:var(--l-ink);
+  --ink-hover:var(--l-ink-hover);
+  --on-ink:var(--l-on-ink);
+  --muted:var(--l-muted);
+  --faint:var(--l-faint);
+  --line:var(--l-line);
+  --line-soft:var(--l-line-soft);
+  --keep:var(--l-keep);
+  --keep-soft:var(--l-keep-soft);
+  --drop:var(--l-drop);
+  --lvl-info:#5B8FA8;
+  --lvl-verbose:#C2CBCC;
+  --lvl-warn:#C98A28;
+  --lvl-fatal:#5C1220;
+}
+
+/* --- dark: by the system when nothing is pinned, or by data-theme="dark" --- */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:var(--d-bg);
+    --panel:var(--d-panel);
+    --ink:var(--d-ink);
+    --ink-hover:var(--d-ink-hover);
+    --on-ink:var(--d-on-ink);
+    --muted:var(--d-muted);
+    --faint:var(--d-faint);
+    --line:var(--d-line);
+    --line-soft:var(--d-line-soft);
+    --keep:var(--d-keep);
+    --keep-soft:var(--d-keep-soft);
+    --drop:var(--d-drop);
+    --lvl-info:#7FB3CC;
+    --lvl-verbose:#55666A;
+    --lvl-warn:#E0A748;
+    --lvl-fatal:#C2445C;
+  }
+}
+
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:var(--d-bg);
+  --panel:var(--d-panel);
+  --ink:var(--d-ink);
+  --ink-hover:var(--d-ink-hover);
+  --on-ink:var(--d-on-ink);
+  --muted:var(--d-muted);
+  --faint:var(--d-faint);
+  --line:var(--d-line);
+  --line-soft:var(--d-line-soft);
+  --keep:var(--d-keep);
+  --keep-soft:var(--d-keep-soft);
+  --drop:var(--d-drop);
+  --lvl-info:#7FB3CC;
+  --lvl-verbose:#55666A;
+  --lvl-warn:#E0A748;
+  --lvl-fatal:#C2445C;
+}
+
+/* styles/layout.css */
+/* Page skeleton: wrapper, header, two-column split, sticky sidebar. */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+
+.top{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding-bottom:14px;margin-bottom:20px;border-bottom:1px solid var(--line);
+}
+.top h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-0.01em}
+.top .sub{color:var(--muted);font-size:13.5px}
+.top .file-tag{
+  font-family:var(--mono);font-size:12.5px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:3px 9px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.top .file-tag.hidden{display:none}
+.top .lang{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.top .lang button{
+  border:0;background:var(--panel);color:var(--muted);font-family:var(--mono);
+  font-size:12px;padding:4px 10px;letter-spacing:0.03em;
+}
+.top .lang button.on{background:var(--ink);color:var(--on-ink)}
+.top .theme{display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.top .theme button{
+  border:0;background:var(--panel);color:var(--muted);font-size:12px;padding:4px 9px;
+}
+.top .theme button.on{background:var(--ink);color:var(--on-ink)}
+
+.app{display:none}
+.app.on{display:block}
+
+/* tab strip */
+.tabs{display:flex;align-items:center;gap:4px;margin-bottom:var(--gap);border-bottom:1px solid var(--line)}
+.tab-btn{
+  border:0;background:none;padding:8px 14px;margin-bottom:-1px;
+  font-size:14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;
+}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.on{color:var(--ink);border-bottom-color:var(--keep)}
+.tab-aside{margin-left:auto;margin-bottom:6px}
+
+.tab-panel{display:none}
+.tab-panel.on{display:block}
+
+/* export tab keeps the two-column split */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;align-items:start}
+.side{display:flex;flex-direction:column;gap:var(--gap);position:sticky;top:16px}
+
+@media (max-width:900px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .side{position:static}
+  .top .lang{margin-left:0}
+  .top .theme{margin-left:0}
+  .tabs{overflow-x:auto}
+}
+
+/* styles/components.css */
+/* Reusable pieces: buttons, panels, tree rows, stats, presets, toast. */
+
+/* --- buttons and inputs --- */
+button{font-family:inherit;font-size:14px;cursor:pointer}
+.btn{background:var(--ink);color:var(--on-ink);border:1px solid var(--ink);border-radius:var(--radius-sm);padding:8px 16px;font-weight:500}
+.btn:hover{background:var(--ink-hover)}
+.btn.ghost{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{background:var(--line-soft)}
+.btn.small{padding:5px 11px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--keep);outline-offset:2px}
+
+/* --- drop zone --- */
+.dropzone{background:var(--panel);border:1.5px dashed var(--line);border-radius:var(--radius);padding:56px 24px;text-align:center}
+.dropzone.over{border-color:var(--keep);background:var(--keep-soft)}
+.dropzone p{margin:0 0 6px;font-size:16px}
+.dropzone .hint{color:var(--muted);font-size:13.5px;margin-bottom:20px}
+.err{color:var(--drop);font-size:13.5px;margin-top:14px;min-height:1em}
+
+/* --- panel shell --- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.panel > .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.panel > .head h2{font-size:14px;font-weight:600;margin:0}
+.search{
+  flex:1 1 180px;min-width:140px;font-family:var(--mono);font-size:13px;color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 9px;background:var(--bg);
+}
+.search::placeholder{color:var(--faint)}
+
+/* --- field tree --- */
+.tree{padding:6px 6px 12px;max-height:min(70vh,720px);overflow:auto}
+.row{display:flex;align-items:flex-start;gap:8px;padding:3px 8px;border-radius:5px}
+.row:hover{background:var(--line-soft)}
+.row .twisty{width:16px;flex:0 0 16px;margin-top:3px;border:0;background:none;padding:0;color:var(--faint);font-size:11px;line-height:1;text-align:center}
+.row .twisty.leaf{visibility:hidden}
+.row .twisty:hover{color:var(--ink)}
+.row input[type=checkbox]{margin:5px 0 0;flex:0 0 auto;width:14px;height:14px;accent-color:var(--keep)}
+.row .body{min-width:0;flex:1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.row .key{font-family:var(--mono);font-size:13px;font-weight:500;word-break:break-all}
+.row .meta{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.row .val{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px}
+.row.dropped .key{text-decoration:line-through;color:var(--drop);text-decoration-thickness:1px}
+.row.dropped .val,.row.dropped .meta{color:var(--drop);opacity:.55}
+.row.inherited{opacity:.5}
+.row.inherited .key{text-decoration:line-through;color:var(--drop)}
+.kids{margin-left:19px;border-left:1px solid var(--line-soft);padding-left:5px}
+.nomatch{padding:18px 14px;color:var(--muted);font-size:13.5px}
+
+/* --- stats --- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft);border-radius:var(--radius);overflow:hidden}
+.stat{background:var(--panel);padding:11px 14px}
+.stat .n{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:-0.02em}
+.stat .l{font-size:12px;color:var(--muted);margin-top:1px}
+.stat .n.shrink{color:var(--keep)}
+
+/* --- options --- */
+.opts{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.opts .row-label{font-size:12px;color:var(--muted)}
+.opts label{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer}
+.opts label input[type=checkbox]{accent-color:var(--keep);width:14px;height:14px;margin:0;flex:0 0 auto}
+.opts label .txt{min-width:0;flex:1}
+.opts label .delta{font-family:var(--mono);font-size:11.5px;color:var(--keep);white-space:nowrap}
+.opts label .delta:empty{display:none}
+.opts .seg{display:flex;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden}
+.opts .seg button{flex:1;border:0;background:var(--panel);padding:7px 4px;font-size:12.5px;color:var(--muted);font-family:var(--mono)}
+.opts .seg button.on{background:var(--ink);color:var(--on-ink)}
+.opts select{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:3px 5px}
+.opts .hint-line{margin:-4px 0 0 22px;font-size:12px;color:var(--faint);line-height:1.35}
+.opts hr{border:0;border-top:1px solid var(--line-soft);margin:3px 0}
+.actions{padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line-soft)}
+.actions .btn{flex:1 1 auto}
+
+/* --- presets --- */
+.presets .body{padding:12px 14px}
+.saverow{display:flex;gap:8px}
+.saverow input{flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 9px;font-family:var(--sans)}
+.plist{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:7px;overflow:hidden}
+.plist:empty{display:none}
+.plist li{background:var(--panel);display:flex;align-items:center;gap:8px;padding:8px 10px}
+.plist li.active{background:var(--keep-soft)}
+.plist .nm{flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plist .cnt{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.plist .x{border:0;background:none;color:var(--faint);font-size:15px;line-height:1;padding:2px 4px}
+.plist .x:hover{color:var(--drop)}
+.empty-note{color:var(--muted);font-size:13px;margin:12px 0 0}
+.store-note{color:var(--faint);font-size:12px;margin:10px 0 0}
+.store-note:empty{display:none}
+details.raw{margin-top:12px}
+details.raw summary{font-size:13px;color:var(--muted);cursor:pointer}
+details.raw textarea{
+  width:100%;height:92px;margin-top:8px;font-family:var(--mono);font-size:11.5px;line-height:1.5;
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px;background:var(--bg);color:var(--ink);resize:vertical;
+}
+.raw-actions{display:flex;gap:8px;margin-top:8px}
+
+/* --- toast --- */
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:var(--ink);color:var(--on-ink);
+  padding:9px 16px;border-radius:var(--radius-sm);font-size:13.5px;opacity:0;pointer-events:none;
+  transition:opacity .18s ease;max-width:90vw;text-align:center;
+}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+
+/* --- query bar --- */
+.qpanel{margin-bottom:var(--gap);padding:12px 14px}
+.qbar{display:flex;gap:8px;align-items:center}
+.query{
+  flex:1;min-width:0;font-family:var(--mono);font-size:13.5px;color:var(--ink);
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px;
+}
+.query::placeholder{color:var(--faint)}
+.tsel{
+  font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 6px;max-width:150px;
+}
+.qmeta{display:flex;align-items:baseline;gap:10px;margin-top:8px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.qerror{color:var(--drop);font-family:var(--mono);font-size:12px}
+.qerror:empty{display:none}
+.linkish{border:0;background:none;color:var(--keep);font-size:12.5px;padding:0;margin-left:auto;text-decoration:underline}
+.qhelp{margin-top:10px;border-top:1px solid var(--line-soft);padding-top:10px}
+.qhelp p{margin:0 0 5px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.5}
+
+/* --- events list --- */
+.events{display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.events:empty{display:none}
+.ev{background:var(--panel)}
+.ev-row{display:flex;align-items:baseline;gap:10px;padding:7px 12px;cursor:pointer}
+.ev-row:hover{background:var(--line-soft)}
+.ev-row.open{background:var(--keep-soft)}
+.ev-time{font-family:var(--mono);font-size:12px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
+.ev-level{flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--faint);align-self:center}
+.lvl-info{background:var(--lvl-info)}
+.lvl-debug{background:var(--faint)}
+.lvl-verbose{background:var(--lvl-verbose)}
+.lvl-warn{background:var(--lvl-warn)}
+.lvl-error{background:var(--drop)}
+.lvl-fatal{background:var(--lvl-fatal)}
+.ev-msg{font-family:var(--mono);font-size:12.5px;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-detail{padding:2px 12px 12px 12px;border-top:1px solid var(--line-soft)}
+.ev-props{width:100%;border-collapse:collapse;table-layout:fixed}
+.ev-props td{padding:2px 6px;vertical-align:top;font-family:var(--mono);font-size:11.5px;border-bottom:1px solid var(--line-soft);word-break:break-all}
+.ev-props td.p{width:44%;color:var(--muted)}
+.ev-props td.v{color:var(--ink)}
+.ev-note{font-size:12px;color:var(--faint);margin:8px 0 0}
+.ev-actions{display:flex;gap:8px;margin-top:10px}
+.more-wrap{display:flex;justify-content:center;margin-top:var(--gap)}
+
+/* --- record tab --- */
+.rec-nav{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.rec-nav .pos{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.inline-check{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-left:auto;cursor:pointer}
+.inline-check input{accent-color:var(--keep);width:14px;height:14px;margin:0}
+.rec-head{display:flex;align-items:baseline;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line-soft)}
+.rec-head:empty{display:none}
+#pre{margin:0;padding:12px 14px;font-family:var(--mono);font-size:11.5px;line-height:1.55;max-height:min(70vh,720px);overflow:auto;white-space:pre;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Clef Lens</h1>
+    <span class="sub" data-i18n="app.tagline"></span>
+    <div class="lang" role="group" data-i18n-aria="lang.group" aria-label="Language">
+      <button id="langEn" data-lang="en">EN</button>
+      <button id="langRu" data-lang="ru">RU</button>
+    </div>
+    <div class="theme" id="theme" role="group" data-i18n-aria="theme.group" aria-label="Theme">
+      <button data-theme-mode="auto" data-i18n="theme.auto"></button>
+      <button data-theme-mode="light" data-i18n="theme.light"></button>
+      <button data-theme-mode="dark" data-i18n="theme.dark"></button>
+    </div>
+    <span class="file-tag hidden" id="fileTag"></span>
+  </header>
+
+  <section class="dropzone" id="dz">
+    <p data-i18n="drop.title"></p>
+    <div class="hint" data-i18n="drop.hint"></div>
+    <button class="btn" id="pick" data-i18n="drop.pick"></button>
+    <input type="file" id="file" accept=".clef,.json,.jsonl,.ndjson,.log,.txt" hidden>
+    <div class="err" id="err"></div>
+  </section>
+
+  <main class="app" id="app">
+
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab-btn on" data-tab="events" role="tab" data-i18n="tab.events"></button>
+      <button class="tab-btn" data-tab="record" role="tab" data-i18n="tab.record"></button>
+      <button class="tab-btn" data-tab="export" role="tab" data-i18n="tab.export"></button>
+      <button class="btn ghost small tab-aside" id="newFile" data-i18n="app.newFile"></button>
+    </nav>
+
+    <!-- ============ events ============ -->
+    <section class="tab-panel on" id="panelEvents" role="tabpanel">
+      <div class="panel qpanel">
+        <div class="qbar">
+          <input class="query" id="eq" type="text" spellcheck="false" data-i18n-ph="events.queryPlaceholder" autocomplete="off">
+          <button class="btn ghost small" id="qClear" data-i18n="events.clear"></button>
+          <select class="tsel" id="timeSel" data-i18n-aria="events.timeFieldAria"></select>
+          <button class="btn ghost small" id="qOrder"></button>
+        </div>
+        <div class="qmeta">
+          <span id="qStatus"></span>
+          <span class="qerror" id="qError"></span>
+          <button class="linkish" id="qHelp" data-i18n="events.help"></button>
+        </div>
+        <div class="qhelp" id="qHelpBox" hidden></div>
+      </div>
+      <div class="events" id="events"></div>
+      <div class="more-wrap"><button class="btn ghost" id="showMore" hidden></button></div>
+    </section>
+
+    <!-- ============ single record ============ -->
+    <section class="tab-panel" id="panelRecord" role="tabpanel">
+      <div class="panel">
+        <div class="rec-nav">
+          <button class="btn ghost small" id="prev" data-i18n="record.prev"></button>
+          <button class="btn ghost small" id="next" data-i18n="record.next"></button>
+          <span class="pos" id="pos">0 / 0</span>
+          <label class="inline-check"><input type="checkbox" id="recFiltered"><span data-i18n="record.filteredView"></span></label>
+          <button class="btn ghost small" id="recCopy" data-i18n="record.copy"></button>
+        </div>
+        <div class="rec-head" id="recHead"></div>
+        <pre id="pre"></pre>
+      </div>
+    </section>
+
+    <!-- ============ export ============ -->
+    <section class="tab-panel" id="panelExport" role="tabpanel">
+      <div class="split">
+        <section class="panel">
+          <div class="head">
+            <h2 data-i18n="fields.title"></h2>
+            <input class="search" id="q" type="search" data-i18n-ph="fields.search" autocomplete="off">
+            <button class="btn ghost small" id="expandAll" data-i18n="fields.expand"></button>
+            <button class="btn ghost small" id="collapseAll" data-i18n="fields.collapse"></button>
+            <button class="btn ghost small" id="resetSel" data-i18n="fields.reset"></button>
+          </div>
+          <div class="tree" id="tree"></div>
+        </section>
+
+        <aside class="side">
+          <section class="stats">
+            <div class="stat"><div class="n" id="sRecords">0</div><div class="l" data-i18n="stats.records"></div></div>
+            <div class="stat"><div class="n" id="sDropped">0</div><div class="l" data-i18n="stats.dropped"></div></div>
+            <div class="stat"><div class="n" id="sBefore">0</div><div class="l" data-i18n="stats.before"></div></div>
+            <div class="stat"><div class="n shrink" id="sAfter">0</div><div class="l" data-i18n="stats.after"></div></div>
+          </section>
+
+          <section class="panel">
+            <div class="opts">
+              <div class="row-label" data-i18n="opts.scope"></div>
+              <label><input type="checkbox" id="optOnlyMatching"><span class="txt" id="onlyMatchingLabel"></span></label>
+              <hr>
+              <div class="row-label" data-i18n="opts.format"></div>
+              <div class="seg" id="fmt">
+                <button data-v="ndjson" class="on" data-i18n="opts.fmtNdjson"></button>
+                <button data-v="array" data-i18n="opts.fmtArray"></button>
+              </div>
+              <label><input type="checkbox" id="optPretty" checked><span class="txt" data-i18n="opts.pretty"></span><span class="delta" id="dPretty"></span></label>
+              <p class="hint-line" id="prettyHint" data-i18n="opts.prettyHint"></p>
+              <hr>
+              <div class="row-label" data-i18n="opts.cleanup"></div>
+              <label><input type="checkbox" id="optNull"><span class="txt" data-i18n="opts.null"></span><span class="delta" id="dNull"></span></label>
+              <label><input type="checkbox" id="optArr"><span class="txt" data-i18n="opts.arrays"></span><span class="delta" id="dArr"></span></label>
+              <label><input type="checkbox" id="optZero"><span class="txt" data-i18n="opts.zeros"></span><span class="delta" id="dZero"></span></label>
+              <label><input type="checkbox" id="optEmpty" checked><span class="txt" data-i18n="opts.emptyObj"></span><span class="delta" id="dEmpty"></span></label>
+              <label>
+                <input type="checkbox" id="optRound"><span class="txt" data-i18n="opts.round"></span>
+                <select id="optDigits"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
+                <span class="delta" id="dRound"></span>
+              </label>
+            </div>
+            <div class="actions">
+              <button class="btn" id="dl" data-i18n="act.download"></button>
+              <button class="btn ghost" id="copy" data-i18n="act.copy"></button>
+            </div>
+          </section>
+
+          <section class="panel presets">
+            <div class="head"><h2 data-i18n="presets.title"></h2></div>
+            <div class="body">
+              <div class="saverow">
+                <input id="presetName" data-i18n-ph="presets.name" autocomplete="off">
+                <button class="btn small" id="savePreset" data-i18n="presets.save"></button>
+              </div>
+              <ul class="plist" id="plist"></ul>
+              <p class="empty-note" id="pEmpty" data-i18n="presets.empty"></p>
+              <p class="store-note" id="storeNote"></p>
+              <details class="raw">
+                <summary data-i18n="presets.raw"></summary>
+                <textarea id="recipe" spellcheck="false" placeholder="report.systemLoad&#10;report.tools.sharing"></textarea>
+                <div class="raw-actions">
+                  <button class="btn ghost small" id="applyRecipe" data-i18n="presets.applyRaw"></button>
+                </div>
+              </details>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+"use strict";
+/* ===== src/util/dom.js ===== */
+/* Thin DOM helpers. Nothing clever on purpose. */
+function byId(id){ return document.getElementById(id); }
+
+function el(tag, className, text){
+  const node = document.createElement(tag);
+  if(className) node.className = className;
+  if(text != null) node.textContent = text;
+  return node;
+}
+
+function clear(node){ node.innerHTML = ""; }
+
+/* ===== src/i18n/en.js ===== */
+/* English strings. Keys are grouped by the part of the UI they belong to. */
+const en = {
+  "app.tagline": "read, query and trim JSON log exports",
+  "app.newFile": "Another file",
+  "theme.group": "Theme",
+  "theme.auto": "Auto",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "lang.group": "Language",
+
+  "drop.title": "Drop a file here",
+  "drop.hint": "NDJSON (.clef, .jsonl) or a plain JSON array",
+  "drop.pick": "Choose a file",
+
+  "err.empty": "The file is empty",
+  "err.nojson": "Nothing in this file parsed as JSON",
+  "err.read": "Could not read the file",
+
+  "file.tag": "{name} · {n} events",
+  "file.bad": "{n} lines unparsed",
+
+  "tab.events": "Events",
+  "tab.record": "Record",
+  "tab.export": "Export",
+
+  "events.queryPlaceholder": "total < 80 and level = 'Error'",
+  "events.clear": "Clear",
+  "events.newestFirst": "Newest first",
+  "events.oldestFirst": "Oldest first",
+  "events.timeFieldAria": "Timestamp field",
+  "events.noTimeField": "no time",
+  "events.help": "Query syntax",
+  "events.count": "{shown} of {total} events",
+  "events.countAll": "{total} events",
+  "events.noTime": "no timestamp field found — file order",
+  "events.timeField": "sorted by {field}",
+  "events.none": "No event matches this query.",
+  "events.showMore": "Show {n} more",
+  "events.open": "Open in Record",
+  "events.copy": "Copy JSON",
+  "events.properties": "Properties",
+  "events.truncated": "Showing the first {n} properties.",
+
+  "help.title": "Query syntax",
+  "help.body": [
+    "Plain text with no operators searches every value: gmail",
+    "Compare fields: total < 80   ·   verdict = 'poor'   ·   @l = 'Error'",
+    "Dotted paths reach inside: report.scores.devices.score <= 40",
+    "Arrays match if any element does: report.media.remote.video.maxQuality = '720p'",
+    "Combine: total < 80 and not Has(reportId)   ·   parentheses work",
+    "Also: like '%gmail.com' · in ['a','b'] · is null · is not null",
+    "Functions: Has() Contains() StartsWith() EndsWith() Lower() Length() Count()",
+    "A leading underscore is optional: email finds _email"
+  ],
+
+  "record.prev": "Back",
+  "record.next": "Forward",
+  "record.copy": "Copy",
+  "record.filteredView": "As it will be exported",
+  "record.empty": "No record to show.",
+  "record.ofFiltered": "{pos} / {total} (filtered)",
+
+  "fields.title": "Fields",
+  "fields.search": "search by path",
+  "fields.expand": "Expand",
+  "fields.collapse": "Collapse",
+  "fields.reset": "Keep everything",
+  "fields.nomatch": "No match. Try another part of the path.",
+
+  "stats.records": "events in output",
+  "stats.dropped": "branches removed",
+  "stats.before": "before",
+  "stats.after": "after",
+
+  "opts.scope": "What goes out",
+  "opts.onlyMatching": "Only events matching the query ({n})",
+  "opts.allEvents": "All {n} events",
+  "opts.format": "Output format",
+  "opts.fmtNdjson": "one per line",
+  "opts.fmtArray": "single array",
+  "opts.pretty": "Indented",
+  "opts.prettyHint": "NDJSON keeps one record per line, so indentation applies to the single-array format only.",
+  "opts.cleanup": "Clean-up",
+  "opts.null": "Remove null",
+  "opts.arrays": "Remove empty arrays",
+  "opts.zeros": "Remove zero counters",
+  "opts.emptyObj": "Remove emptied objects",
+  "opts.round": "Round decimals to",
+
+  "act.download": "Download JSON",
+  "act.copy": "Copy",
+
+  "presets.title": "Presets",
+  "presets.name": "Preset name",
+  "presets.save": "Save",
+  "presets.apply": "Apply",
+  "presets.delete": "Delete preset {name}",
+  "presets.count": "{n} br.",
+  "presets.empty": "No presets yet. Mark up the fields and save — the set is applied to the next file you load.",
+  "presets.memory": "Your browser blocked storage, so presets last until you reload. Copy the list as text to keep it.",
+  "presets.raw": "Branch list as text",
+  "presets.applyRaw": "Apply list",
+  "presets.fallbackName": "Preset {n}",
+
+  "toast.saved": "File saved",
+  "toast.copied": "Copied",
+  "toast.copyFail": "Copy did not work",
+  "toast.listApplied": "List applied: {n} branches",
+  "toast.presetSaved": "Preset “{name}” saved",
+  "toast.presetUpdated": "Preset “{name}” updated",
+  "toast.presetSession": "Saved for this session only",
+  "toast.presetApplied": "Preset “{name}”: {hit} of {total} branches found in this file",
+  "toast.presetNoFile": "Preset “{name}” applied — load a file to see it",
+
+  "unit.b": "B",
+  "unit.kb": "KB",
+  "unit.mb": "MB"
+};
+
+/* ===== src/i18n/ru.js ===== */
+/* Russian strings. Keep the key list in sync with en.js. */
+const ru = {
+  "app.tagline": "читать, фильтровать и подрезать JSON-логи",
+  "app.newFile": "Другой файл",
+  "theme.group": "Тема",
+  "theme.auto": "Авто",
+  "theme.light": "День",
+  "theme.dark": "Ночь",
+  "lang.group": "Язык",
+
+  "drop.title": "Перетащите файл сюда",
+  "drop.hint": "NDJSON (.clef, .jsonl) или обычный JSON-массив",
+  "drop.pick": "Выберите файл",
+
+  "err.empty": "Файл пустой",
+  "err.nojson": "Не удалось разобрать ни одной строки как JSON",
+  "err.read": "Не удалось прочитать файл",
+
+  "file.tag": "{name} · {n} событий",
+  "file.bad": "{n} строк не разобрано",
+
+  "tab.events": "События",
+  "tab.record": "Запись",
+  "tab.export": "Экспорт",
+
+  "events.queryPlaceholder": "total < 80 and level = 'Error'",
+  "events.clear": "Очистить",
+  "events.newestFirst": "Сначала новые",
+  "events.oldestFirst": "Сначала старые",
+  "events.timeFieldAria": "Поле со временем",
+  "events.noTimeField": "без времени",
+  "events.help": "Синтаксис запросов",
+  "events.count": "{shown} из {total} событий",
+  "events.countAll": "событий: {total}",
+  "events.noTime": "поле со временем не найдено — порядок как в файле",
+  "events.timeField": "сортировка по {field}",
+  "events.none": "Под этот запрос ничего не подходит.",
+  "events.showMore": "Показать ещё {n}",
+  "events.open": "Открыть в «Записи»",
+  "events.copy": "Копировать JSON",
+  "events.properties": "Поля",
+  "events.truncated": "Показаны первые {n} полей.",
+
+  "help.title": "Синтаксис запросов",
+  "help.body": [
+    "Текст без операторов ищется по всем значениям: gmail",
+    "Сравнение полей: total < 80   ·   verdict = 'poor'   ·   @l = 'Error'",
+    "Путь через точку заглядывает внутрь: report.scores.devices.score <= 40",
+    "Массив подходит, если совпал любой элемент: report.media.remote.video.maxQuality = '720p'",
+    "Склейка: total < 80 and not Has(reportId)   ·   скобки работают",
+    "Ещё: like '%gmail.com' · in ['a','b'] · is null · is not null",
+    "Функции: Has() Contains() StartsWith() EndsWith() Lower() Length() Count()",
+    "Ведущее подчёркивание необязательно: email найдёт _email"
+  ],
+
+  "record.prev": "Назад",
+  "record.next": "Вперёд",
+  "record.copy": "Копировать",
+  "record.filteredView": "Как уедет в выгрузку",
+  "record.empty": "Нечего показать.",
+  "record.ofFiltered": "{pos} / {total} (отобрано)",
+
+  "fields.title": "Поля",
+  "fields.search": "поиск по пути",
+  "fields.expand": "Развернуть",
+  "fields.collapse": "Свернуть",
+  "fields.reset": "Вернуть всё",
+  "fields.nomatch": "Ничего не нашлось. Попробуйте другой кусок пути.",
+
+  "stats.records": "событий в выгрузке",
+  "stats.dropped": "веток убрано",
+  "stats.before": "было",
+  "stats.after": "станет",
+
+  "opts.scope": "Что выгружаем",
+  "opts.onlyMatching": "Только отобранные запросом ({n})",
+  "opts.allEvents": "Все события: {n}",
+  "opts.format": "Формат выгрузки",
+  "opts.fmtNdjson": "строка = запись",
+  "opts.fmtArray": "один массив",
+  "opts.pretty": "С отступами",
+  "opts.prettyHint": "В NDJSON каждая запись — одна строка, поэтому отступы работают только для формата «один массив».",
+  "opts.cleanup": "Чистка",
+  "opts.null": "Убирать null",
+  "opts.arrays": "Убирать пустые массивы",
+  "opts.zeros": "Убирать нулевые счётчики",
+  "opts.emptyObj": "Убирать опустевшие объекты",
+  "opts.round": "Округлять дробные до",
+
+  "act.download": "Скачать JSON",
+  "act.copy": "Скопировать",
+
+  "presets.title": "Пресеты",
+  "presets.name": "Название набора",
+  "presets.save": "Сохранить",
+  "presets.apply": "Применить",
+  "presets.delete": "Удалить набор {name}",
+  "presets.count": "{n} вет.",
+  "presets.empty": "Сохранённых наборов пока нет. Разметьте поля и сохраните — набор подхватится при загрузке следующего файла.",
+  "presets.memory": "Браузер запретил сохранение — наборы живут до перезагрузки страницы. Скопируйте список текстом, чтобы не потерять.",
+  "presets.raw": "Список веток текстом",
+  "presets.applyRaw": "Применить список",
+  "presets.fallbackName": "Набор {n}",
+
+  "toast.saved": "Файл сохранён",
+  "toast.copied": "Скопировано",
+  "toast.copyFail": "Скопировать не вышло",
+  "toast.listApplied": "Список применён: {n} веток",
+  "toast.presetSaved": "Набор «{name}» сохранён",
+  "toast.presetUpdated": "Набор «{name}» обновлён",
+  "toast.presetSession": "Сохранено только на эту сессию",
+  "toast.presetApplied": "Набор «{name}»: {hit} из {total} веток нашлось в файле",
+  "toast.presetNoFile": "Набор «{name}» применён — загрузите файл, чтобы увидеть",
+
+  "unit.b": "Б",
+  "unit.kb": "КБ",
+  "unit.mb": "МБ"
+};
+
+/* ===== src/i18n/index.js ===== */
+/* Translation lookup and DOM application.
+   Markup opts in with data-i18n / data-i18n-ph / data-i18n-title / data-i18n-aria. */
+
+const LOCALES = { en: en, ru: ru };
+const DEFAULT_LANG = "en";
+
+let currentLang = DEFAULT_LANG;
+
+function getLang(){ return currentLang; }
+
+function setLang(lang){
+  currentLang = LOCALES[lang] ? lang : DEFAULT_LANG;
+  document.documentElement.lang = currentLang;
+  applyI18n();
+  return currentLang;
+}
+
+/* t("presets.count", { n: 12 }) -> "12 br." */
+function t(key, params){
+  const dict = LOCALES[currentLang] || en;
+  let s = dict[key] != null ? dict[key] : (en[key] != null ? en[key] : key);
+  if(Array.isArray(s)) return s;          // string lists, e.g. help.body
+  if(params){
+    for(const k in params) s = s.split("{" + k + "}").join(String(params[k]));
+  }
+  return s;
+}
+
+function applyI18n(root){
+  const scope = root || document;
+  scope.querySelectorAll("[data-i18n]").forEach(function(el){
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  scope.querySelectorAll("[data-i18n-ph]").forEach(function(el){
+    el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
+  });
+  scope.querySelectorAll("[data-i18n-title]").forEach(function(el){
+    el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
+  });
+  scope.querySelectorAll("[data-i18n-aria]").forEach(function(el){
+    el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
+  });
+}
+
+/* ===== src/core/parse.js ===== */
+/* Turns raw file text into an array of records.
+   Accepts NDJSON (one JSON object per line) and plain JSON arrays/objects. */
+
+class ParseError extends Error {
+  constructor(key){ super(key); this.key = key; }
+}
+
+function parseText(text){
+  text = text.replace(/^\uFEFF/, "").trim();
+  if(!text) throw new ParseError("err.empty");
+
+  // A whole-file array or a single-line object: try JSON.parse first.
+  if(text[0] === "[" || (text[0] === "{" && text.indexOf("\n") === -1)){
+    try{
+      const whole = JSON.parse(text);
+      return { rows: Array.isArray(whole) ? whole : [whole], bad: 0 };
+    }catch(e){ /* fall through to line-by-line */ }
+  }
+
+  const rows = [];
+  let bad = 0;
+  const lines = text.split(/\r?\n/);
+  for(let i = 0; i < lines.length; i++){
+    let s = lines[i].trim();
+    if(!s || s === "[" || s === "]") continue;
+    if(s.charAt(s.length - 1) === ",") s = s.slice(0, -1);
+    try{ rows.push(JSON.parse(s)); }catch(e){ bad++; }
+  }
+  if(!rows.length) throw new ParseError("err.nojson");
+  return { rows: rows, bad: bad };
+}
+
+/* ===== src/core/schema.js ===== */
+/* Merges every record into one field tree.
+   A node's path ignores array indices, so report.media.remote[3].audio
+   and report.media.remote[0].audio are the same node. */
+
+function makeNode(name, path){
+  return {
+    name: name, path: path,
+    kids: new Map(), kinds: new Set(),
+    isArray: false, isObject: false,
+    seen: new Set(), samples: [], maxLen: 0
+  };
+}
+
+function kindOf(v){
+  if(v === null) return "null";
+  const t = typeof v;
+  if(t === "number") return Number.isInteger(v) ? "int" : "num";
+  if(t === "boolean") return "bool";
+  if(t === "string") return "str";
+  return t;
+}
+
+function observeValue(node, value, rec){
+  node.seen.add(rec);
+
+  if(Array.isArray(value)){
+    node.isArray = true;
+    if(value.length > node.maxLen) node.maxLen = value.length;
+    for(let i = 0; i < value.length; i++) observeValue(node, value[i], rec);
+    return;
+  }
+
+  if(value && typeof value === "object"){
+    node.isObject = true;
+    const keys = Object.keys(value);
+    for(let k = 0; k < keys.length; k++){
+      const key = keys[k];
+      let kid = node.kids.get(key);
+      if(!kid){
+        kid = makeNode(key, node.path ? node.path + "." + key : key);
+        node.kids.set(key, kid);
+      }
+      observeValue(kid, value[key], rec);
+    }
+    return;
+  }
+
+  node.kinds.add(kindOf(value));
+  if(node.samples.length < 2 && value !== null && value !== "") node.samples.push(value);
+}
+
+function buildSchema(rows){
+  const root = makeNode("", "");
+  for(let i = 0; i < rows.length; i++) observeValue(root, rows[i], i);
+  return root;
+}
+
+function collectPaths(node, into){
+  node.kids.forEach(function(kid){
+    into.add(kid.path);
+    collectPaths(kid, into);
+  });
+  return into;
+}
+
+/* "[2]" for arrays, "{7}" for objects, "int|null" for leaves,
+   plus "2/3" when the field is missing from some records. */
+function nodeLabel(node, totalRecords){
+  const bits = [];
+  if(node.isArray) bits.push("[" + node.maxLen + "]");
+  else if(node.isObject) bits.push("{" + node.kids.size + "}");
+  else {
+    const kinds = Array.from(node.kinds);
+    if(kinds.length) bits.push(kinds.join("|"));
+  }
+  if(node.seen.size < totalRecords) bits.push(node.seen.size + "/" + totalRecords);
+  return bits.join(" ");
+}
+
+function sampleText(node){
+  if(node.isObject || !node.samples.length) return "";
+  const s = node.samples.map(function(v){
+    return typeof v === "string" ? v : JSON.stringify(v);
+  }).join(", ");
+  return s.length > 70 ? s.slice(0, 70) + "…" : s;
+}
+
+/* ===== src/core/filter.js ===== */
+/* The actual filtering: drop excluded branches, then apply clean-up rules.
+
+   excluded — Set of dot paths, e.g. "report.systemLoad"
+   options  — { dropNull, dropArr, dropZero, dropEmpty, round }
+              round is -1 when rounding is off, otherwise the digit count. */
+
+function isEmptyObject(v){
+  return v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0;
+}
+
+/* Should this value be left out after its own children were processed? */
+function isJunk(v, o){
+  if(v === null) return !!o.dropNull;
+  if(Array.isArray(v)) return !!o.dropArr && v.length === 0;
+  if(typeof v === "object") return !!o.dropEmpty && Object.keys(v).length === 0;
+  if(o.dropZero) return v === 0 || v === false || v === "";
+  return false;
+}
+
+function pruneValue(value, path, excluded, o){
+  if(Array.isArray(value)){
+    const arr = [];
+    for(let i = 0; i < value.length; i++){
+      const item = pruneValue(value[i], path, excluded, o);
+      if(isJunk(item, o)) continue;
+      arr.push(item);
+    }
+    return arr;
+  }
+
+  if(value && typeof value === "object"){
+    const out = {};
+    const keys = Object.keys(value);
+    for(let k = 0; k < keys.length; k++){
+      const key = keys[k];
+      const childPath = path ? path + "." + key : key;
+      if(excluded.has(childPath)) continue;
+      const res = pruneValue(value[key], childPath, excluded, o);
+      if(isJunk(res, o)) continue;
+      out[key] = res;
+    }
+    return out;
+  }
+
+  if(o.round >= 0 && typeof value === "number" && !Number.isInteger(value)){
+    return Number(value.toFixed(o.round));
+  }
+  return value;
+}
+
+function pruneAll(records, excluded, o){
+  const out = [];
+  for(let i = 0; i < records.length; i++){
+    out.push(pruneValue(records[i], "", excluded, o));
+  }
+  return out;
+}
+
+/* ===== src/core/format.js ===== */
+/* Serialisation and human-readable byte sizes. */
+
+const encoder = new TextEncoder();
+
+function serializeRows(rows, format, pretty){
+  const indent = pretty ? 2 : 0;
+  if(format === "array") return JSON.stringify(rows, null, indent);
+  const parts = [];
+  for(let i = 0; i < rows.length; i++) parts.push(JSON.stringify(rows[i], null, indent));
+  return parts.join("\n");
+}
+
+function byteLength(str){ return encoder.encode(str).length; }
+
+function formatBytes(bytes){
+  if(bytes < 1024) return bytes + " " + t("unit.b");
+  const nf = new Intl.NumberFormat(getLang(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  if(bytes < 1048576) return nf.format(bytes / 1024) + " " + t("unit.kb");
+  const nf2 = new Intl.NumberFormat(getLang(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return nf2.format(bytes / 1048576) + " " + t("unit.mb");
+}
+
+/* Only worth showing a saving once it is more than a rounding artefact. */
+function formatSaving(bytes){
+  return bytes > 40 ? "−" + formatBytes(bytes) : "";
+}
+
+/* ===== src/core/query.js ===== */
+/* A small Seq-flavoured query language.
+
+   total < 80 and @l = 'Error'
+   report.media.remote.video.maxQuality = '720p'
+   email like '%@gmail.com' or not Has(reportId)
+   @t >= '2026-09-14T09:00'
+
+   Grammar (loosest binding first):
+     or    := and ("or" and)*
+     and   := not ("and" not)*
+     not   := ("not" | "!") not | cmp
+     cmp   := primary (op primary | "like" primary | "in" "[" list "]" | "is" ["not"] "null")?
+     prim  := "(" or ")" | literal | Func(args) | dotted.path
+
+   A path always evaluates to a LIST of values: walking through an array
+   collects every element, so `remote.video.maxQuality = '720p'` is true when
+   any remote participant matches. Comparisons succeed if any pair matches. */
+
+class QueryError extends Error {
+  constructor(message){ super(message); this.name = "QueryError"; }
+}
+
+const KEYWORDS = ["and", "or", "not", "like", "in", "is", "null", "true", "false"];
+const TWO_CHAR = ["<=", ">=", "<>", "!=", "=="];
+const ONE_CHAR = ["=", "<", ">", "(", ")", "[", "]", ","];
+
+function tokenizeQuery(input){
+  const tokens = [];
+  let i = 0;
+  while(i < input.length){
+    const ch = input[i];
+
+    if(/\s/.test(ch)){ i++; continue; }
+
+    if(ch === "'" || ch === '"'){
+      const quote = ch;
+      let j = i + 1, out = "";
+      while(j < input.length && input[j] !== quote){
+        if(input[j] === "\\" && j + 1 < input.length){ out += input[j + 1]; j += 2; continue; }
+        out += input[j]; j++;
+      }
+      if(j >= input.length) throw new QueryError("Unclosed string");
+      tokens.push({ t: "str", v: out });
+      i = j + 1;
+      continue;
+    }
+
+    if(/[0-9]/.test(ch) || (ch === "-" && /[0-9]/.test(input[i + 1] || ""))){
+      let j = i + 1;
+      while(j < input.length && /[0-9.]/.test(input[j])) j++;
+      tokens.push({ t: "num", v: Number(input.slice(i, j)) });
+      i = j;
+      continue;
+    }
+
+    if(/[A-Za-z_@$]/.test(ch)){
+      let j = i;
+      while(j < input.length && /[A-Za-z0-9_@$.]/.test(input[j])) j++;
+      const word = input.slice(i, j);
+      tokens.push(KEYWORDS.indexOf(word.toLowerCase()) !== -1
+        ? { t: "kw", v: word.toLowerCase() }
+        : { t: "id", v: word });
+      i = j;
+      continue;
+    }
+
+    if(ch === "&" && input[i + 1] === "&"){ tokens.push({ t: "kw", v: "and" }); i += 2; continue; }
+    if(ch === "|" && input[i + 1] === "|"){ tokens.push({ t: "kw", v: "or" }); i += 2; continue; }
+    if(ch === "!" && input[i + 1] !== "="){ tokens.push({ t: "kw", v: "not" }); i += 1; continue; }
+
+    const two = input.slice(i, i + 2);
+    if(TWO_CHAR.indexOf(two) !== -1){ tokens.push({ t: "op", v: two }); i += 2; continue; }
+    if(ONE_CHAR.indexOf(ch) !== -1){ tokens.push({ t: ch === "(" || ch === ")" || ch === "[" || ch === "]" || ch === "," ? "punc" : "op", v: ch }); i++; continue; }
+
+    throw new QueryError("Unexpected character: " + ch);
+  }
+  return tokens;
+}
+
+/* A query with no operators and no keywords is treated as plain text search. */
+function isFreeText(tokens){
+  return tokens.every(function(tk){ return tk.t === "id" || tk.t === "str" || tk.t === "num"; })
+      && !tokens.some(function(tk){ return tk.t === "id" && tk.v.indexOf(".") !== -1; });
+}
+
+function parseQuery(tokens){
+  let pos = 0;
+  const peek = function(){ return tokens[pos]; };
+  const next = function(){ return tokens[pos++]; };
+  const isKw = function(word){ const tk = peek(); return tk && tk.t === "kw" && tk.v === word; };
+  const isPunc = function(ch){ const tk = peek(); return tk && tk.t === "punc" && tk.v === ch; };
+  const expect = function(ch){
+    if(!isPunc(ch)) throw new QueryError("Expected " + ch);
+    next();
+  };
+
+  function parseOr(){
+    let left = parseAnd();
+    while(isKw("or")){ next(); left = { type: "logical", op: "or", left: left, right: parseAnd() }; }
+    return left;
+  }
+  function parseAnd(){
+    let left = parseNot();
+    while(isKw("and")){ next(); left = { type: "logical", op: "and", left: left, right: parseNot() }; }
+    return left;
+  }
+  function parseNot(){
+    if(isKw("not")){ next(); return { type: "not", expr: parseNot() }; }
+    return parseCmp();
+  }
+  function parseCmp(){
+    const left = parsePrimary();
+    const tk = peek();
+    if(!tk) return left;
+
+    if(tk.t === "op"){
+      next();
+      return { type: "binary", op: tk.v, left: left, right: parsePrimary() };
+    }
+    if(tk.t === "kw" && (tk.v === "like" || tk.v === "in" || tk.v === "is")){
+      next();
+      if(tk.v === "like") return { type: "like", left: left, right: parsePrimary(), negate: false };
+      if(tk.v === "is"){
+        let negate = false;
+        if(isKw("not")){ next(); negate = true; }
+        if(!isKw("null")) throw new QueryError("Expected null after is");
+        next();
+        return { type: "isnull", expr: left, negate: negate };
+      }
+      expect("[");
+      const list = [];
+      while(!isPunc("]")){
+        list.push(parsePrimary());
+        if(isPunc(",")) next();
+      }
+      expect("]");
+      return { type: "in", left: left, list: list };
+    }
+    return left;
+  }
+  function parsePrimary(){
+    const tk = next();
+    if(!tk) throw new QueryError("Unexpected end of query");
+
+    if(tk.t === "punc" && tk.v === "("){
+      const inner = parseOr();
+      expect(")");
+      return inner;
+    }
+    if(tk.t === "str") return { type: "lit", value: tk.v };
+    if(tk.t === "num") return { type: "lit", value: tk.v };
+    if(tk.t === "kw" && tk.v === "true") return { type: "lit", value: true };
+    if(tk.t === "kw" && tk.v === "false") return { type: "lit", value: false };
+    if(tk.t === "kw" && tk.v === "null") return { type: "lit", value: null };
+    if(tk.t === "kw" && tk.v === "not") return { type: "not", expr: parseNot() };
+    if(tk.t === "id"){
+      if(isPunc("(")){
+        next();
+        const args = [];
+        while(!isPunc(")")){
+          args.push(parseOr());
+          if(isPunc(",")) next();
+        }
+        expect(")");
+        return { type: "call", name: tk.v.toLowerCase(), args: args };
+      }
+      return { type: "path", path: tk.v };
+    }
+    throw new QueryError("Unexpected token: " + tk.v);
+  }
+
+  const ast = parseOr();
+  if(pos < tokens.length) throw new QueryError("Unexpected token: " + tokens[pos].v);
+  return ast;
+}
+
+/* Walks a dotted path, flattening arrays on the way. Falls back to the
+   underscore-prefixed name, so `email` also finds CLEF's `_email`. */
+function resolvePath(record, path){
+  const direct = [];
+  walk(record, path.split("."), 0, direct);
+  if(direct.length || path[0] === "_" || path[0] === "@") return direct;
+
+  const parts = path.split(".");
+  parts[0] = "_" + parts[0];
+  const prefixed = [];
+  walk(record, parts, 0, prefixed);
+  return prefixed;
+
+  function walk(value, parts, i, out){
+    if(value === undefined) return;
+    if(i >= parts.length){ out.push(value); return; }
+    if(Array.isArray(value)){
+      value.forEach(function(item){ walk(item, parts, i, out); });
+      return;
+    }
+    if(value && typeof value === "object"){ walk(value[parts[i]], parts, i + 1, out); return; }
+  }
+}
+
+function looseEquals(a, b){
+  if(a === null || b === null) return a === b;
+  if(typeof a === "number" && typeof b === "string" && b !== "" && !isNaN(Number(b))) return a === Number(b);
+  if(typeof b === "number" && typeof a === "string" && a !== "" && !isNaN(Number(a))) return Number(a) === b;
+  if(typeof a === "string" && typeof b === "string") return a.toLowerCase() === b.toLowerCase();
+  return a === b;
+}
+
+function ordered(op, a, b){
+  if(a === null || b === null || a === undefined || b === undefined) return false;
+  let x = a, y = b;
+  if(typeof x === "string" && typeof y === "number" && !isNaN(Number(x))) x = Number(x);
+  if(typeof y === "string" && typeof x === "number" && !isNaN(Number(y))) y = Number(y);
+  if(typeof x === "object" || typeof y === "object") return false;
+  switch(op){
+    case "<": return x < y;
+    case "<=": return x <= y;
+    case ">": return x > y;
+    case ">=": return x >= y;
+  }
+  return false;
+}
+
+function likeToRegExp(pattern){
+  const escaped = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("^" + escaped.split("%").join(".*").split("_").join(".") + "$", "i");
+}
+
+/* Every node evaluates to a list of values; booleans are lists of one. */
+function evalValues(node, record){
+  switch(node.type){
+    case "lit": return [node.value];
+    case "path": return resolvePath(record, node.path);
+    case "call": return [callFunction(node, record)];
+    default: return [evalBool(node, record)];
+  }
+}
+
+function callFunction(node, record){
+  const args = node.args.map(function(a){ return evalValues(a, record); });
+  const first = args[0] || [];
+  const second = args[1] || [];
+  const anyPair = function(fn){
+    return first.some(function(a){ return second.some(function(b){ return fn(a, b); }); });
+  };
+  switch(node.name){
+    case "has": return first.length > 0 && first.some(function(v){ return v !== undefined && v !== null; });
+    case "contains": return anyPair(function(a, b){ return String(a).toLowerCase().indexOf(String(b).toLowerCase()) !== -1; });
+    case "startswith": return anyPair(function(a, b){ return String(a).toLowerCase().indexOf(String(b).toLowerCase()) === 0; });
+    case "endswith": return anyPair(function(a, b){
+      const s = String(a).toLowerCase(), t = String(b).toLowerCase();
+      return s.lastIndexOf(t) === s.length - t.length && t.length <= s.length;
+    });
+    case "length": return first.length ? (first[0] == null ? 0 : (first[0].length != null ? first[0].length : String(first[0]).length)) : 0;
+    case "lower": return first.length ? String(first[0]).toLowerCase() : "";
+    case "count": return first.length;
+    default: throw new QueryError("Unknown function: " + node.name);
+  }
+}
+
+function evalBool(node, record){
+  switch(node.type){
+    case "logical":
+      return node.op === "and"
+        ? evalBool(node.left, record) && evalBool(node.right, record)
+        : evalBool(node.left, record) || evalBool(node.right, record);
+
+    case "not":
+      return !evalBool(node.expr, record);
+
+    case "binary": {
+      const left = evalValues(node.left, record);
+      const right = evalValues(node.right, record);
+      if(!left.length || !right.length){
+        // Missing field: only "not equal" can still be true.
+        return (node.op === "!=" || node.op === "<>") && !!right.length;
+      }
+      return left.some(function(a){
+        return right.some(function(b){
+          if(node.op === "=" || node.op === "==") return looseEquals(a, b);
+          if(node.op === "!=" || node.op === "<>") return !looseEquals(a, b);
+          return ordered(node.op, a, b);
+        });
+      });
+    }
+
+    case "like": {
+      const left = evalValues(node.left, record);
+      const right = evalValues(node.right, record);
+      if(!left.length || !right.length) return false;
+      const re = likeToRegExp(right[0]);
+      return left.some(function(v){ return re.test(String(v)); });
+    }
+
+    case "in": {
+      const left = evalValues(node.left, record);
+      const options = node.list.reduce(function(acc, item){ return acc.concat(evalValues(item, record)); }, []);
+      return left.some(function(a){ return options.some(function(b){ return looseEquals(a, b); }); });
+    }
+
+    case "isnull": {
+      const values = evalValues(node.expr, record);
+      const isNull = !values.length || values.every(function(v){ return v === null || v === undefined; });
+      return node.negate ? !isNull : isNull;
+    }
+
+    default: {
+      const values = evalValues(node, record);
+      return values.some(function(v){
+        return Array.isArray(v) ? v.length > 0 : !!v;
+      });
+    }
+  }
+}
+
+/* Compiles text into a predicate. Returns null for an empty query. */
+function compileQuery(text){
+  const trimmed = (text || "").trim();
+  if(!trimmed) return null;
+
+  const tokens = tokenizeQuery(trimmed);
+  if(!tokens.length) return null;
+
+  if(isFreeText(tokens)){
+    const needle = trimmed.replace(/^['"]|['"]$/g, "").toLowerCase();
+    return function(record){
+      return JSON.stringify(record).toLowerCase().indexOf(needle) !== -1;
+    };
+  }
+
+  const ast = parseQuery(tokens);
+  return function(record){ return evalBool(ast, record); };
+}
+
+/* ===== src/core/events.js ===== */
+/* Turning records into a chronological event list:
+   timestamp detection, level, message rendering, ordering and filtering. */
+
+/* "@t" is the CLEF timestamp and always wins; the rest are fallbacks. */
+const TIME_PRIORITY = { "@t": 50, "_timestamp": 14, "timestamp": 14, "_date": 8, "date": 8, "time": 8 };
+const TIME_PATTERN = /(^|_)(t|ts|at|time|timestamp|date)$/i;
+
+function parseTime(value){
+  if(value == null) return null;
+  if(typeof value === "number"){
+    // Heuristic: anything below ~1e11 is seconds, above is milliseconds.
+    const ms = value < 100000000000 ? value * 1000 : value;
+    return isFinite(ms) ? ms : null;
+  }
+  if(typeof value === "string"){
+    const ms = Date.parse(value);
+    return isNaN(ms) ? null : ms;
+  }
+  return null;
+}
+
+/* Every top-level field whose values parse as a date, best guess first. */
+function timeFieldCandidates(records){
+  if(!records.length) return [];
+  const sample = records.slice(0, 20);
+  const scores = {};
+
+  sample.forEach(function(record){
+    if(!record || typeof record !== "object") return;
+    Object.keys(record).forEach(function(key){
+      if(parseTime(record[key]) === null) return;
+      let score = 1;
+      if(TIME_PRIORITY[key]) score += TIME_PRIORITY[key];
+      if(TIME_PATTERN.test(key)) score += 3;
+      if(typeof record[key] === "string") score += 1;
+      scores[key] = (scores[key] || 0) + score;
+    });
+  });
+
+  return Object.keys(scores).sort(function(a, b){ return scores[b] - scores[a]; });
+}
+
+function detectTimeField(records){
+  return timeFieldCandidates(records)[0] || null;
+}
+
+function recordTime(record, field){
+  if(!field || !record) return null;
+  return parseTime(record[field]);
+}
+
+function formatEventTime(ms, withDate){
+  if(ms == null) return "—";
+  const date = new Date(ms);
+  const time = new Intl.DateTimeFormat(getLang(), {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+  }).format(date);
+  if(!withDate) return time;
+  const day = new Intl.DateTimeFormat(getLang(), { day: "2-digit", month: "short" }).format(date);
+  return day + " " + time;
+}
+
+const LEVEL_MAP = {
+  v: "verbose", vrb: "verbose", verbose: "verbose", trace: "verbose",
+  d: "debug", dbg: "debug", debug: "debug",
+  i: "info", inf: "info", info: "info", information: "info",
+  w: "warn", wrn: "warn", warn: "warn", warning: "warn",
+  e: "error", err: "error", error: "error",
+  f: "fatal", ftl: "fatal", fatal: "fatal", critical: "fatal"
+};
+
+function recordLevel(record){
+  const raw = record && (record["@l"] || record.level || record.Level);
+  if(!raw) return "info";
+  return LEVEL_MAP[String(raw).toLowerCase()] || "info";
+}
+
+/* CLEF message templates: "{Total} of {Max}" with property substitution.
+   Prefers an already-rendered @m, falls back to a couple of scalar fields. */
+function renderMessage(record){
+  if(!record || typeof record !== "object") return String(record);
+  if(typeof record["@m"] === "string") return record["@m"];
+
+  const template = record["@mt"] || record.message || record.Message;
+  if(typeof template === "string"){
+    return template.replace(/\{@?([A-Za-z0-9_.]+)(?::[^}]*)?\}/g, function(match, name){
+      const value = record[name] !== undefined ? record[name]
+                  : record["_" + name] !== undefined ? record["_" + name]
+                  : undefined;
+      if(value === undefined) return match;
+      return typeof value === "object" ? JSON.stringify(value) : String(value);
+    });
+  }
+
+  const scalars = Object.keys(record)
+    .filter(function(k){
+      const v = record[k];
+      return k[0] !== "@" && v !== null && typeof v !== "object";
+    })
+    .slice(0, 4)
+    .map(function(k){ return k + "=" + record[k]; });
+  return scalars.join("  ") || "{…}";
+}
+
+/* Flat list of leaf paths for the expanded event detail. */
+function flattenRecord(record, limit){
+  const out = [];
+  const max = limit || 400;
+
+  (function walk(value, path){
+    if(out.length >= max) return;
+    if(Array.isArray(value)){
+      if(!value.length){ out.push({ path: path, value: "[]" }); return; }
+      value.forEach(function(item, i){ walk(item, path + "[" + i + "]"); });
+      return;
+    }
+    if(value && typeof value === "object"){
+      const keys = Object.keys(value);
+      if(!keys.length){ out.push({ path: path, value: "{}" }); return; }
+      keys.forEach(function(key){ walk(value[key], path ? path + "." + key : key); });
+      return;
+    }
+    out.push({ path: path, value: value === null ? "null" : String(value) });
+  })(record, "");
+
+  return out;
+}
+
+/* Indices of matching records, in display order.
+   Throws QueryError when the text does not compile. */
+function buildView(records, queryText, timeField, order){
+  const predicate = compileQuery(queryText);
+  const indices = [];
+
+  for(let i = 0; i < records.length; i++){
+    if(predicate && !predicate(records[i])) continue;
+    indices.push(i);
+  }
+
+  if(timeField){
+    indices.sort(function(a, b){
+      const ta = recordTime(records[a], timeField);
+      const tb = recordTime(records[b], timeField);
+      if(ta === null && tb === null) return a - b;
+      if(ta === null) return 1;
+      if(tb === null) return -1;
+      return order === "asc" ? ta - tb : tb - ta;
+    });
+  }else if(order === "desc"){
+    indices.reverse();
+  }
+
+  return indices;
+}
+
+/* True when the events span more than one calendar day, so rows need dates. */
+function spansDays(records, timeField){
+  if(!timeField) return false;
+  let min = null, max = null;
+  for(let i = 0; i < records.length; i++){
+    const t = recordTime(records[i], timeField);
+    if(t === null) continue;
+    if(min === null || t < min) min = t;
+    if(max === null || t > max) max = t;
+  }
+  if(min === null || max === null) return false;
+  return new Date(min).toDateString() !== new Date(max).toDateString();
+}
+
+/* ===== src/state.js ===== */
+/* Single shared state object plus a tiny event bus.
+   UI modules mutate state and emit("refresh"); main.js owns the redraw. */
+
+const state = {
+  // --- source data ---
+  records: [],          // parsed events, in file order
+  fileName: "events",
+  beforeBytes: 0,
+
+  // --- events tab ---
+  activeTab: "events",
+  eventQuery: "",       // query language text
+  queryError: null,     // message shown under the query bar
+  view: [],             // indices into records, in display order
+  timeField: null,      // detected timestamp key
+  withDates: false,     // events span more than one day
+  order: "desc",        // "desc" = newest first
+  openEvents: new Set(),
+  eventLimit: 200,      // rows rendered before "show more"
+
+  // --- record tab ---
+  recordCursor: 0,      // position within view
+  recordFiltered: false,// show the record as it will be exported
+
+  // --- export tab ---
+  root: null,           // merged field tree
+  allPaths: new Set(),
+  excluded: new Set(),  // paths the user removed
+  expanded: new Set(),  // open tree nodes
+  treeQuery: "",        // field search
+  format: "ndjson",     // "ndjson" | "array"
+  onlyMatching: false,  // export just the queried events
+  outText: "",
+
+  theme: "auto",        // "auto" | "light" | "dark"
+
+  db: { presets: [], lastId: null, lang: null, theme: null }
+};
+
+const handlers = {};
+
+function on(event, fn){
+  if(!handlers[event]) handlers[event] = [];
+  handlers[event].push(fn);
+}
+
+function emit(event, payload){
+  (handlers[event] || []).forEach(function(fn){ fn(payload); });
+}
+
+/* ===== src/store/storage.js ===== */
+/* Key-value storage with three backends, picked in this order:
+     widget  - window.storage, available when the page runs as a Claude artifact
+     local   - window.localStorage, the normal case on GitHub Pages or file://
+     memory  - private mode or a blocked origin; data lives until reload
+   Every method returns a Promise so callers do not care which one won. */
+
+let backend = null;
+let memory = {};
+
+function detect(){
+  if(typeof window !== "undefined" && window.storage && typeof window.storage.get === "function"){
+    return "widget";
+  }
+  try{
+    const probe = "__probe" + Date.now();
+    window.localStorage.setItem(probe, "1");
+    window.localStorage.removeItem(probe);
+    return "local";
+  }catch(e){
+    return "memory";
+  }
+}
+
+function storageMode(){
+  if(backend === null) backend = detect();
+  return backend;
+}
+
+function readKey(key, fallback){
+  const mode = storageMode();
+  if(mode === "widget"){
+    return Promise.resolve()
+      .then(function(){ return window.storage.get(key, false); })
+      .then(function(r){ return r && r.value ? JSON.parse(r.value) : fallback; })
+      .catch(function(){ return memory[key] != null ? memory[key] : fallback; });
+  }
+  if(mode === "local"){
+    try{
+      const raw = window.localStorage.getItem(key);
+      return Promise.resolve(raw ? JSON.parse(raw) : fallback);
+    }catch(e){
+      return Promise.resolve(memory[key] != null ? memory[key] : fallback);
+    }
+  }
+  return Promise.resolve(memory[key] != null ? memory[key] : fallback);
+}
+
+function writeKey(key, value){
+  memory[key] = value;
+  const mode = storageMode();
+  if(mode === "widget"){
+    return Promise.resolve()
+      .then(function(){ return window.storage.set(key, JSON.stringify(value), false); })
+      .then(function(){ return true; })
+      .catch(function(){ backend = "memory"; return false; });
+  }
+  if(mode === "local"){
+    try{
+      window.localStorage.setItem(key, JSON.stringify(value));
+      return Promise.resolve(true);
+    }catch(e){
+      backend = "memory";
+      return Promise.resolve(false);
+    }
+  }
+  return Promise.resolve(false);
+}
+
+/* ===== src/store/presets.js ===== */
+/* Preset records live in one storage key, together with the chosen language.
+   A preset = { id, name, paths, opts, ts } */
+
+const DB_KEY = "clefLens:db";
+const LEGACY_KEY = "reportFilter:db";   // pre-rename storage, read once
+
+function blankDb(){ return { presets: [], lastId: null, lang: null, theme: null }; }
+
+function loadDb(){
+  return readKey(DB_KEY, null).then(function(db){
+    if(db && Array.isArray(db.presets)) return normalise(db);
+    // Nothing under the current key: pick up presets saved before the rename.
+    return readKey(LEGACY_KEY, null).then(function(legacy){
+      return legacy && Array.isArray(legacy.presets) ? normalise(legacy) : blankDb();
+    });
+  });
+}
+
+function normalise(db){
+  return {
+    presets: db.presets,
+    lastId: db.lastId || null,
+    lang: db.lang || null,
+    theme: db.theme || null
+  };
+}
+
+function saveDb(db){ return writeKey(DB_KEY, db); }
+
+function findPreset(db, id){
+  return db.presets.filter(function(p){ return p.id === id; })[0] || null;
+}
+
+/* Saving under an existing name overwrites that preset. */
+function upsertPreset(db, name, paths, opts){
+  const existing = db.presets.filter(function(p){ return p.name === name; })[0];
+  const preset = {
+    id: existing ? existing.id : String(Date.now()),
+    name: name,
+    paths: paths,
+    opts: opts,
+    ts: Date.now()
+  };
+  if(existing){
+    db.presets = db.presets.map(function(p){ return p.id === existing.id ? preset : p; });
+  }else{
+    db.presets.push(preset);
+  }
+  db.lastId = preset.id;
+  return { preset: preset, replaced: !!existing };
+}
+
+function removePreset(db, id){
+  db.presets = db.presets.filter(function(p){ return p.id !== id; });
+  if(db.lastId === id) db.lastId = null;
+}
+
+/* ===== src/ui/toast.js ===== */
+/* One-line transient message at the bottom of the screen. */
+
+let timer = null;
+
+function showToast(message){
+  const node = byId("toast");
+  if(!node) return;
+  node.textContent = message;
+  node.classList.add("on");
+  clearTimeout(timer);
+  timer = setTimeout(function(){ node.classList.remove("on"); }, 2400);
+}
+
+/* ===== src/ui/lang.js ===== */
+/* EN / RU switch in the header. */
+
+function syncLangButtons(){
+  const current = getLang();
+  ["langEn", "langRu"].forEach(function(id){
+    const btn = byId(id);
+    if(btn) btn.classList.toggle("on", btn.getAttribute("data-lang") === current);
+  });
+}
+
+function mountLang(onChange){
+  ["langEn", "langRu"].forEach(function(id){
+    const btn = byId(id);
+    if(!btn) return;
+    btn.onclick = function(){
+      setLang(btn.getAttribute("data-lang"));
+      syncLangButtons();
+      onChange(getLang());
+    };
+  });
+  syncLangButtons();
+}
+
+/* ===== src/ui/theme.js ===== */
+/* Light / dark switching.
+
+   "auto" leaves the html element without data-theme, so the media query in
+   tokens.css follows the operating system. "light" and "dark" pin it. */
+
+const THEMES = ["auto", "light", "dark"];
+
+function applyTheme(mode){
+  const theme = THEMES.indexOf(mode) !== -1 ? mode : "auto";
+  state.theme = theme;
+
+  if(theme === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+
+  syncThemeButtons();
+  return theme;
+}
+
+function syncThemeButtons(){
+  const group = byId("theme");
+  if(!group) return;
+  Array.prototype.forEach.call(group.querySelectorAll("button"), function(btn){
+    const active = btn.getAttribute("data-theme-mode") === state.theme;
+    btn.classList.toggle("on", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function mountTheme(onChange){
+  const group = byId("theme");
+  if(!group) return;
+  Array.prototype.forEach.call(group.querySelectorAll("button"), function(btn){
+    btn.onclick = function(){
+      applyTheme(btn.getAttribute("data-theme-mode"));
+      onChange(state.theme);
+    };
+  });
+  syncThemeButtons();
+}
+
+/* ===== src/ui/dropzone.js ===== */
+/* File picking, drag and drop, and the parse error line. */
+
+function showParseError(key){
+  const node = byId("err");
+  if(node) node.textContent = key ? t(key) : "";
+}
+
+function showApp(){
+  byId("dz").style.display = "none";
+  byId("app").classList.add("on");
+}
+
+function showDropzone(){
+  byId("app").classList.remove("on");
+  byId("dz").style.display = "";
+  byId("fileTag").classList.add("hidden");
+  byId("file").value = "";
+}
+
+function setFileTag(text){
+  const tag = byId("fileTag");
+  tag.classList.remove("hidden");
+  tag.textContent = text;
+}
+
+function mountDropzone(onFile){
+  const zone = byId("dz");
+  const input = byId("file");
+
+  byId("pick").onclick = function(){ input.click(); };
+  input.onchange = function(e){
+    if(e.target.files && e.target.files[0]) read(e.target.files[0]);
+  };
+
+  ["dragenter", "dragover"].forEach(function(ev){
+    zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function(ev){
+    zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.remove("over"); });
+  });
+  zone.addEventListener("drop", function(e){
+    const file = e.dataTransfer && e.dataTransfer.files[0];
+    if(file) read(file);
+  });
+
+  function read(file){
+    const reader = new FileReader();
+    reader.onload = function(){ onFile(String(reader.result), file.name); };
+    reader.onerror = function(){ showParseError("err.read"); };
+    reader.readAsText(file, "utf-8");
+  }
+}
+
+/* ===== src/ui/tabs.js ===== */
+/* Tab strip shown once a file is loaded. */
+
+const PANELS = { events: "panelEvents", record: "panelRecord", export: "panelExport" };
+
+function setTab(name){
+  if(!PANELS[name]) return;
+  state.activeTab = name;
+
+  Object.keys(PANELS).forEach(function(key){
+    byId(PANELS[key]).classList.toggle("on", key === name);
+  });
+  Array.prototype.forEach.call(byId("tabs").querySelectorAll(".tab-btn"), function(btn){
+    const active = btn.getAttribute("data-tab") === name;
+    btn.classList.toggle("on", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  emit("refresh");
+}
+
+function mountTabs(){
+  Array.prototype.forEach.call(byId("tabs").querySelectorAll(".tab-btn"), function(btn){
+    btn.onclick = function(){ setTab(btn.getAttribute("data-tab")); };
+  });
+}
+
+/* ===== src/ui/tree.js ===== */
+/* The field tree: one row per node, checkbox = keep, unchecked = drop.
+   Unchecking a node removes its descendants from the exclusion set,
+   because the parent already covers them. */
+
+function hasExcludedDescendant(node){
+  let found = false;
+  node.kids.forEach(function(kid){
+    if(found) return;
+    if(state.excluded.has(kid.path) || hasExcludedDescendant(kid)) found = true;
+  });
+  return found;
+}
+
+function treeMatches(node){
+  if(!state.treeQuery) return true;
+  if(node.path.toLowerCase().indexOf(state.treeQuery) !== -1) return true;
+  let found = false;
+  node.kids.forEach(function(kid){ if(!found && treeMatches(kid)) found = true; });
+  return found;
+}
+
+function toggleNodeExclusion(node){
+  if(state.excluded.has(node.path)){
+    state.excluded.delete(node.path);
+  }else{
+    Array.from(state.excluded).forEach(function(p){
+      if(p.indexOf(node.path + ".") === 0) state.excluded.delete(p);
+    });
+    state.excluded.add(node.path);
+  }
+  emit("refresh");
+}
+
+function renderNode(node, parentDropped){
+  const selfDropped = state.excluded.has(node.path);
+  const dropped = selfDropped || parentDropped;
+  const wrap = el("div");
+
+  const row = el("div", "row" + (selfDropped ? " dropped" : "") + (parentDropped ? " inherited" : ""));
+
+  const isOpen = state.expanded.has(node.path) || !!state.treeQuery;
+  const twisty = el("button", "twisty" + (node.kids.size ? "" : " leaf"), isOpen ? "▾" : "▸");
+  twisty.setAttribute("aria-label", isOpen ? t("fields.collapse") : t("fields.expand"));
+  twisty.onclick = function(){
+    if(state.expanded.has(node.path)) state.expanded.delete(node.path);
+    else state.expanded.add(node.path);
+    emit("tree");
+  };
+  row.appendChild(twisty);
+
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = !dropped;
+  box.disabled = parentDropped;
+  box.indeterminate = !dropped && hasExcludedDescendant(node);
+  box.title = node.path;
+  box.onchange = function(){ toggleNodeExclusion(node); };
+  row.appendChild(box);
+
+  const body = el("div", "body");
+  body.appendChild(el("span", "key", node.name + (node.isArray ? "[]" : "")));
+  body.appendChild(el("span", "meta", nodeLabel(node, state.records.length)));
+  const sample = sampleText(node);
+  if(sample) body.appendChild(el("span", "val", sample));
+  row.appendChild(body);
+
+  wrap.appendChild(row);
+
+  if(node.kids.size && isOpen){
+    const kids = el("div", "kids");
+    node.kids.forEach(function(kid){
+      if(treeMatches(kid)) kids.appendChild(renderNode(kid, dropped));
+    });
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+function renderTree(){
+  const host = byId("tree");
+  clear(host);
+  if(!state.root) return;
+
+  let any = false;
+  state.root.kids.forEach(function(kid){
+    if(!treeMatches(kid)) return;
+    any = true;
+    host.appendChild(renderNode(kid, false));
+  });
+  if(!any) host.appendChild(el("div", "nomatch", t("fields.nomatch")));
+}
+
+function mountTree(){
+  byId("q").oninput = function(e){
+    state.treeQuery = e.target.value.trim().toLowerCase();
+    emit("tree");
+  };
+  byId("expandAll").onclick = function(){
+    (function walk(node){
+      node.kids.forEach(function(kid){
+        if(kid.kids.size) state.expanded.add(kid.path);
+        walk(kid);
+      });
+    })(state.root);
+    emit("tree");
+  };
+  byId("collapseAll").onclick = function(){
+    state.expanded = new Set();
+    emit("tree");
+  };
+  byId("resetSel").onclick = function(){
+    state.excluded = new Set();
+    emit("refresh");
+  };
+}
+
+/* ===== src/ui/options.js ===== */
+/* Output format, clean-up switches, and the per-switch byte savings.
+   Deltas are recomputed on every change, so they are skipped on big files. */
+
+const DELTA_LIMIT = 400; // records
+const DELTA_IDS = {
+  dPretty: "pretty",
+  dNull: "dropNull",
+  dArr: "dropArr",
+  dZero: "dropZero",
+  dEmpty: "dropEmpty"
+};
+
+/* Which records leave the building: everything, or just the queried ones.
+   Export keeps file order even when the events list is sorted newest first. */
+function exportRecords(){
+  if(!state.onlyMatching) return state.records;
+  return state.view.slice().sort(function(a, b){ return a - b; })
+    .map(function(i){ return state.records[i]; });
+}
+
+function readOptions(overrides){
+  const o = {
+    // NDJSON must stay one record per line, so indentation is an array-only option.
+    pretty: byId("optPretty").checked && state.format === "array",
+    dropNull: byId("optNull").checked,
+    dropArr: byId("optArr").checked,
+    dropZero: byId("optZero").checked,
+    dropEmpty: byId("optEmpty").checked,
+    round: byId("optRound").checked ? parseInt(byId("optDigits").value, 10) : -1
+  };
+  if(overrides) for(const k in overrides) o[k] = overrides[k];
+  return o;
+}
+
+function renderScopeLabel(){
+  byId("onlyMatchingLabel").textContent = t("opts.onlyMatching", { n: state.view.length });
+  byId("optOnlyMatching").checked = state.onlyMatching;
+}
+
+function syncPrettyAvailability(){
+  const arrayMode = state.format === "array";
+  byId("optPretty").disabled = !arrayMode;
+  byId("optPretty").parentElement.style.opacity = arrayMode ? "" : ".5";
+  byId("prettyHint").style.display = arrayMode ? "none" : "";
+}
+
+function applyOptionsToDom(o){
+  if(!o) return;
+  byId("optPretty").checked = !!o.pretty;
+  byId("optNull").checked = !!o.dropNull;
+  byId("optArr").checked = !!o.dropArr;
+  byId("optZero").checked = !!o.dropZero;
+  byId("optEmpty").checked = !!o.dropEmpty;
+  byId("optRound").checked = o.round >= 0;
+  if(o.round >= 0) byId("optDigits").value = String(o.round);
+}
+
+function sizeWith(overrides){
+  const o = readOptions(overrides);
+  const rows = pruneAll(exportRecords(), state.excluded, o);
+  return byteLength(serializeRows(rows, state.format, o.pretty));
+}
+
+function renderDeltas(){
+  const ids = Object.keys(DELTA_IDS).concat(["dRound"]);
+  const count = exportRecords().length;
+  if(count > DELTA_LIMIT || !count){
+    ids.forEach(function(id){ byId(id).textContent = ""; });
+    return;
+  }
+  Object.keys(DELTA_IDS).forEach(function(id){
+    const key = DELTA_IDS[id];
+    const on = {}; on[key] = true;
+    const off = {}; off[key] = false;
+    // "pretty" costs bytes, the clean-up switches save them.
+    const diff = key === "pretty" ? sizeWith(on) - sizeWith(off) : sizeWith(off) - sizeWith(on);
+    byId(id).textContent = formatSaving(diff);
+  });
+  const digits = parseInt(byId("optDigits").value, 10);
+  byId("dRound").textContent = formatSaving(sizeWith({ round: -1 }) - sizeWith({ round: digits }));
+}
+
+function download(){
+  const ext = state.format === "array" ? ".json" : ".ndjson.json";
+  const blob = new Blob([state.outText], { type: "application/json;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = state.fileName + "-filtered" + ext;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  showToast(t("toast.saved"));
+}
+
+function copyOut(){
+  const done = function(){ showToast(t("toast.copied")); };
+  const fallback = function(){
+    const ta = document.createElement("textarea");
+    ta.value = state.outText;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand("copy"); done(); }
+    catch(e){ showToast(t("toast.copyFail")); }
+    document.body.removeChild(ta);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(state.outText).then(done, fallback);
+  }else{
+    fallback();
+  }
+}
+
+function mountOptions(){
+  const seg = byId("fmt");
+  Array.prototype.forEach.call(seg.children, function(btn){
+    btn.onclick = function(){
+      Array.prototype.forEach.call(seg.children, function(b){ b.classList.remove("on"); });
+      btn.classList.add("on");
+      state.format = btn.getAttribute("data-v");
+      syncPrettyAvailability();
+      emit("refresh");
+    };
+  });
+
+  ["optPretty", "optNull", "optArr", "optZero", "optEmpty", "optRound"].forEach(function(id){
+    byId(id).onchange = function(){ emit("refresh"); };
+  });
+  byId("optDigits").onchange = function(){
+    byId("optRound").checked = true;
+    emit("refresh");
+  };
+
+  byId("optOnlyMatching").onchange = function(e){
+    state.onlyMatching = e.target.checked;
+    emit("refresh");
+  };
+
+  syncPrettyAvailability();
+  byId("dl").onclick = download;
+  byId("copy").onclick = copyOut;
+}
+
+/* ===== src/ui/summary.js ===== */
+/* Counters on the export tab. */
+
+function renderStats(){
+  byId("sRecords").textContent = exportRecords().length;
+  byId("sDropped").textContent = state.excluded.size;
+  byId("sBefore").textContent = formatBytes(state.beforeBytes);
+  byId("sAfter").textContent = formatBytes(byteLength(state.outText));
+}
+
+/* ===== src/ui/events.js ===== */
+/* The events tab: query bar, chronological list, expandable detail. */
+
+const DETAIL_LIMIT = 400;
+let debounce = null;
+
+function openRecord(index){
+  const pos = state.view.indexOf(index);
+  state.recordCursor = pos < 0 ? 0 : pos;
+  setTab("record");
+}
+
+function copyRecord(record){
+  const text = JSON.stringify(record, null, 2);
+  const done = function(){ showToast(t("toast.copied")); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, done);
+  }else{
+    done();
+  }
+}
+
+function detailBlock(record, index){
+  const box = el("div", "ev-detail");
+
+  const props = el("table", "ev-props");
+  const rows = flattenRecord(record, DETAIL_LIMIT);
+  rows.forEach(function(row){
+    const tr = el("tr");
+    tr.appendChild(el("td", "p", row.path));
+    tr.appendChild(el("td", "v", row.value));
+    props.appendChild(tr);
+  });
+  box.appendChild(props);
+
+  if(rows.length >= DETAIL_LIMIT){
+    box.appendChild(el("p", "ev-note", t("events.truncated", { n: DETAIL_LIMIT })));
+  }
+
+  const actions = el("div", "ev-actions");
+  const open = el("button", "btn ghost small", t("events.open"));
+  open.onclick = function(e){ e.stopPropagation(); openRecord(index); };
+  actions.appendChild(open);
+
+  const copy = el("button", "btn ghost small", t("events.copy"));
+  copy.onclick = function(e){ e.stopPropagation(); copyRecord(record); };
+  actions.appendChild(copy);
+
+  box.appendChild(actions);
+  return box;
+}
+
+function eventRow(index){
+  const record = state.records[index];
+  const wrap = el("div", "ev");
+  const isOpen = state.openEvents.has(index);
+
+  const row = el("div", "ev-row" + (isOpen ? " open" : ""));
+  row.setAttribute("role", "button");
+  row.setAttribute("tabindex", "0");
+
+  row.appendChild(el("span", "ev-time", formatEventTime(recordTime(record, state.timeField), state.withDates)));
+  row.appendChild(el("span", "ev-level lvl-" + recordLevel(record)));
+  row.appendChild(el("span", "ev-msg", renderMessage(record)));
+
+  const toggle = function(){
+    if(state.openEvents.has(index)) state.openEvents.delete(index);
+    else state.openEvents.add(index);
+    emit("events");
+  };
+  row.onclick = toggle;
+  row.onkeydown = function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+  };
+
+  wrap.appendChild(row);
+  if(isOpen) wrap.appendChild(detailBlock(record, index));
+  return wrap;
+}
+
+function renderTimeSelect(){
+  const select = byId("timeSel");
+  const candidates = timeFieldCandidates(state.records);
+  clear(select);
+
+  if(!candidates.length){ select.hidden = true; return; }
+  select.hidden = false;
+
+  const none = el("option", "", t("events.noTimeField"));
+  none.value = "";
+  select.appendChild(none);
+  candidates.forEach(function(key){
+    const option = el("option", "", key);
+    option.value = key;
+    select.appendChild(option);
+  });
+  select.value = state.timeField || "";
+}
+
+function renderEvents(){
+  renderTimeSelect();
+  const host = byId("events");
+  clear(host);
+
+  const status = byId("qStatus");
+  const total = state.records.length;
+  const shown = state.view.length;
+  const scope = state.timeField
+    ? t("events.timeField", { field: state.timeField })
+    : t("events.noTime");
+  status.textContent = (shown === total ? t("events.countAll", { total: total })
+                                        : t("events.count", { shown: shown, total: total }))
+                       + " · " + scope;
+
+  byId("qError").textContent = state.queryError || "";
+  byId("qOrder").textContent = state.order === "desc" ? t("events.newestFirst") : t("events.oldestFirst");
+
+  if(!shown){
+    host.appendChild(el("div", "nomatch", t("events.none")));
+    byId("showMore").hidden = true;
+    return;
+  }
+
+  const limit = Math.min(state.eventLimit, shown);
+  for(let i = 0; i < limit; i++) host.appendChild(eventRow(state.view[i]));
+
+  const rest = shown - limit;
+  const more = byId("showMore");
+  more.hidden = rest <= 0;
+  if(rest > 0){
+    more.textContent = t("events.showMore", { n: Math.min(rest, 200) });
+    more.onclick = function(){
+      state.eventLimit += 200;
+      emit("events");
+    };
+  }
+}
+
+function renderHelp(){
+  const box = byId("qHelpBox");
+  clear(box);
+  const lines = t("help.body");
+  (Array.isArray(lines) ? lines : [lines]).forEach(function(line){
+    box.appendChild(el("p", "", line));
+  });
+}
+
+function mountEvents(){
+  const input = byId("eq");
+
+  input.oninput = function(e){
+    const value = e.target.value;
+    clearTimeout(debounce);
+    debounce = setTimeout(function(){
+      state.eventQuery = value;
+      state.eventLimit = 200;
+      emit("refresh");
+    }, 160);
+  };
+
+  byId("qClear").onclick = function(){
+    input.value = "";
+    state.eventQuery = "";
+    state.eventLimit = 200;
+    emit("refresh");
+  };
+
+  byId("timeSel").onchange = function(e){
+    state.timeField = e.target.value || null;
+    state.withDates = spansDays(state.records, state.timeField);
+    emit("refresh");
+  };
+
+  byId("qOrder").onclick = function(){
+    state.order = state.order === "desc" ? "asc" : "desc";
+    emit("refresh");
+  };
+
+  byId("qHelp").onclick = function(){
+    const box = byId("qHelpBox");
+    box.hidden = !box.hidden;
+    if(!box.hidden) renderHelp();
+  };
+}
+
+/* ===== src/ui/record.js ===== */
+/* The record tab: one event at a time, raw or as it will be exported. */
+
+function currentIndex(){
+  if(!state.view.length) return -1;
+  if(state.recordCursor >= state.view.length) state.recordCursor = 0;
+  return state.view[state.recordCursor];
+}
+
+function renderRecord(){
+  const head = byId("recHead");
+  const body = byId("pre");
+  clear(head);
+
+  const index = currentIndex();
+  byId("pos").textContent = state.view.length
+    ? t("record.ofFiltered", { pos: state.recordCursor + 1, total: state.view.length })
+    : "0 / 0";
+  byId("prev").disabled = state.recordCursor <= 0;
+  byId("next").disabled = state.recordCursor >= state.view.length - 1;
+
+  if(index < 0){
+    body.textContent = t("record.empty");
+    return;
+  }
+
+  const record = state.records[index];
+  head.appendChild(el("span", "ev-time", formatEventTime(recordTime(record, state.timeField), true)));
+  head.appendChild(el("span", "ev-level lvl-" + recordLevel(record)));
+  head.appendChild(el("span", "ev-msg", renderMessage(record)));
+
+  const shown = state.recordFiltered
+    ? pruneValue(record, "", state.excluded, readOptions())
+    : record;
+  body.textContent = JSON.stringify(shown, null, 2);
+}
+
+function mountRecord(){
+  byId("prev").onclick = function(){
+    if(state.recordCursor > 0){ state.recordCursor--; emit("refresh"); }
+  };
+  byId("next").onclick = function(){
+    if(state.recordCursor < state.view.length - 1){ state.recordCursor++; emit("refresh"); }
+  };
+  byId("recFiltered").onchange = function(e){
+    state.recordFiltered = e.target.checked;
+    emit("refresh");
+  };
+  byId("recCopy").onclick = function(){
+    const done = function(){ showToast(t("toast.copied")); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(byId("pre").textContent).then(done, done);
+    }else{
+      done();
+    }
+  };
+}
+
+/* ===== src/ui/presets.js ===== */
+/* Saved exclusion sets. A preset carries both the branch list and the
+   clean-up options, so applying one restores the whole setup. */
+
+function applyPreset(preset, announce){
+  state.excluded = new Set(preset.paths);
+  applyOptionsToDom(preset.opts);
+  state.db.lastId = preset.id;
+  saveDb(state.db);
+  emit("refresh");
+
+  if(!announce) return;
+  if(!state.records.length){
+    showToast(t("toast.presetNoFile", { name: preset.name }));
+    return;
+  }
+  const hit = preset.paths.filter(function(p){ return state.allPaths.has(p); }).length;
+  showToast(t("toast.presetApplied", { name: preset.name, hit: hit, total: preset.paths.length }));
+}
+
+function renderPresets(){
+  const list = byId("plist");
+  clear(list);
+
+  state.db.presets.forEach(function(preset){
+    const li = el("li", preset.id === state.db.lastId ? "active" : "");
+    li.appendChild(el("span", "nm", preset.name));
+    li.appendChild(el("span", "cnt", t("presets.count", { n: preset.paths.length })));
+
+    const use = el("button", "btn ghost small", t("presets.apply"));
+    use.onclick = function(){ applyPreset(preset, true); };
+    li.appendChild(use);
+
+    const del = el("button", "x", "×");
+    del.setAttribute("aria-label", t("presets.delete", { name: preset.name }));
+    del.onclick = function(){
+      removePreset(state.db, preset.id);
+      saveDb(state.db);
+      renderPresets();
+    };
+    li.appendChild(del);
+
+    list.appendChild(li);
+  });
+
+  byId("pEmpty").style.display = state.db.presets.length ? "none" : "";
+  byId("storeNote").textContent = storageMode() === "memory" ? t("presets.memory") : "";
+}
+
+function renderRecipe(){
+  byId("recipe").value = Array.from(state.excluded).sort().join("\n");
+}
+
+function mountPresets(){
+  byId("savePreset").onclick = function(){
+    const field = byId("presetName");
+    const name = field.value.trim() || t("presets.fallbackName", { n: state.db.presets.length + 1 });
+    const result = upsertPreset(
+      state.db,
+      name,
+      Array.from(state.excluded).sort(),
+      readOptions()
+    );
+    field.value = "";
+    renderPresets();
+    saveDb(state.db).then(function(ok){
+      if(!ok){ showToast(t("toast.presetSession")); return; }
+      showToast(t(result.replaced ? "toast.presetUpdated" : "toast.presetSaved", { name: name }));
+    });
+  };
+
+  byId("applyRecipe").onclick = function(){
+    const lines = byId("recipe").value
+      .split(/[\n,]/)
+      .map(function(s){ return s.trim(); })
+      .filter(Boolean);
+    state.excluded = new Set(lines);
+    emit("refresh");
+    showToast(t("toast.listApplied", { n: lines.length }));
+  };
+}
+
+/* ===== src/main.js ===== */
+/* Wiring. Owns the redraw cycle and the file-loading flow;
+   every other module stays unaware of the others. */
+
+/* Re-runs the query, then repaints. The export text is always recomputed,
+   because the stats live on a different tab from the switches that change it. */
+function refresh(){
+  recomputeView();
+
+  const options = readOptions();
+  const rows = pruneAll(exportRecords(), state.excluded, options);
+  state.outText = serializeRows(rows, state.format, options.pretty);
+
+  renderEvents();
+  renderRecord();
+  renderScopeLabel();
+  renderTree();
+  renderStats();
+  renderDeltas();
+  renderRecipe();
+}
+
+function recomputeView(){
+  if(!state.records.length){
+    state.view = [];
+    state.queryError = null;
+    return;
+  }
+  try{
+    state.view = buildView(state.records, state.eventQuery, state.timeField, state.order);
+    state.queryError = null;
+  }catch(e){
+    if(!(e instanceof QueryError)) throw e;
+    // Keep the previous result on screen and explain what is wrong.
+    state.queryError = e.message;
+  }
+}
+
+function loadFile(text, name){
+  let parsed;
+  try{
+    parsed = parseText(text);
+  }catch(e){
+    showParseError(e instanceof ParseError ? e.key : "err.read");
+    return;
+  }
+  showParseError(null);
+
+  state.records = parsed.rows;
+  state.fileName = (name || "events").replace(/\.[^.]+$/, "");
+  state.beforeBytes = byteLength(text);
+
+  state.timeField = detectTimeField(state.records);
+  state.withDates = spansDays(state.records, state.timeField);
+  state.openEvents = new Set();
+  state.eventLimit = 200;
+  state.recordCursor = 0;
+
+  state.root = buildSchema(state.records);
+  state.allPaths = collectPaths(state.root, new Set());
+  state.expanded = new Set();
+  state.root.kids.forEach(function(node){
+    if(node.kids.size) state.expanded.add(node.path);
+  });
+  state.treeQuery = "";
+  byId("q").value = "";
+
+  // Re-apply the last preset so a similar export lands ready to go.
+  const auto = findPreset(state.db, state.db.lastId);
+  state.excluded = auto ? new Set(auto.paths) : new Set();
+  if(auto) applyOptionsToDom(auto.opts);
+
+  let tag = t("file.tag", { name: name, n: state.records.length });
+  if(parsed.bad) tag += " · " + t("file.bad", { n: parsed.bad });
+  setFileTag(tag);
+
+  showApp();
+  renderPresets();
+  setTab("events");
+
+  if(auto){
+    const hit = auto.paths.filter(function(p){ return state.allPaths.has(p); }).length;
+    showToast(t("toast.presetApplied", { name: auto.name, hit: hit, total: auto.paths.length }));
+  }
+}
+
+function onThemeChange(theme){
+  state.db.theme = theme;
+  saveDb(state.db);
+}
+
+function onLangChange(lang){
+  state.db.lang = lang;
+  saveDb(state.db);
+  renderPresets();
+  if(state.records.length) refresh();
+}
+
+function boot(){
+  on("refresh", refresh);
+  on("tree", renderTree);
+  on("events", renderEvents);
+
+  mountDropzone(loadFile);
+  mountTabs();
+  mountEvents();
+  mountRecord();
+  mountTree();
+  mountOptions();
+  mountPresets();
+  mountLang(onLangChange);
+  mountTheme(onThemeChange);
+
+  byId("newFile").onclick = function(){
+    showDropzone();
+    state.records = [];
+    state.root = null;
+    state.view = [];
+  };
+
+  setLang(DEFAULT_LANG);
+  syncLangButtons();
+  applyTheme("auto");
+
+  loadDb().then(function(db){
+    state.db = db;
+    if(db.lang){
+      setLang(db.lang);
+      syncLangButtons();
+    }
+    if(db.theme) applyTheme(db.theme);
+    renderPresets();
+  });
+
+  applyI18n();
+
+  // Debug hook: inspect or drive the app from the console, and from tools/smoke-test.js
+  window.clefLens = { state: state, refresh: refresh };
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

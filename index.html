@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clef Lens</title>
+<meta name="description" content="Read, query and trim NDJSON / CLEF log exports entirely in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/tokens.css">
+<link rel="stylesheet" href="./styles/layout.css">
+<link rel="stylesheet" href="./styles/components.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Clef Lens</h1>
+    <span class="sub" data-i18n="app.tagline"></span>
+    <div class="lang" role="group" data-i18n-aria="lang.group" aria-label="Language">
+      <button id="langEn" data-lang="en">EN</button>
+      <button id="langRu" data-lang="ru">RU</button>
+    </div>
+    <div class="theme" id="theme" role="group" data-i18n-aria="theme.group" aria-label="Theme">
+      <button data-theme-mode="auto" data-i18n="theme.auto"></button>
+      <button data-theme-mode="light" data-i18n="theme.light"></button>
+      <button data-theme-mode="dark" data-i18n="theme.dark"></button>
+    </div>
+    <span class="file-tag hidden" id="fileTag"></span>
+  </header>
+
+  <section class="dropzone" id="dz">
+    <p data-i18n="drop.title"></p>
+    <div class="hint" data-i18n="drop.hint"></div>
+    <button class="btn" id="pick" data-i18n="drop.pick"></button>
+    <input type="file" id="file" accept=".clef,.json,.jsonl,.ndjson,.log,.txt" hidden>
+    <div class="err" id="err"></div>
+  </section>
+
+  <main class="app" id="app">
+
+    <nav class="tabs" id="tabs" role="tablist">
+      <button class="tab-btn on" data-tab="events" role="tab" data-i18n="tab.events"></button>
+      <button class="tab-btn" data-tab="record" role="tab" data-i18n="tab.record"></button>
+      <button class="tab-btn" data-tab="export" role="tab" data-i18n="tab.export"></button>
+      <button class="btn ghost small tab-aside" id="newFile" data-i18n="app.newFile"></button>
+    </nav>
+
+    <!-- ============ events ============ -->
+    <section class="tab-panel on" id="panelEvents" role="tabpanel">
+      <div class="panel qpanel">
+        <div class="qbar">
+          <input class="query" id="eq" type="text" spellcheck="false" data-i18n-ph="events.queryPlaceholder" autocomplete="off">
+          <button class="btn ghost small" id="qClear" data-i18n="events.clear"></button>
+          <select class="tsel" id="timeSel" data-i18n-aria="events.timeFieldAria"></select>
+          <button class="btn ghost small" id="qOrder"></button>
+        </div>
+        <div class="qmeta">
+          <span id="qStatus"></span>
+          <span class="qerror" id="qError"></span>
+          <button class="linkish" id="qHelp" data-i18n="events.help"></button>
+        </div>
+        <div class="qhelp" id="qHelpBox" hidden></div>
+      </div>
+      <div class="events" id="events"></div>
+      <div class="more-wrap"><button class="btn ghost" id="showMore" hidden></button></div>
+    </section>
+
+    <!-- ============ single record ============ -->
+    <section class="tab-panel" id="panelRecord" role="tabpanel">
+      <div class="panel">
+        <div class="rec-nav">
+          <button class="btn ghost small" id="prev" data-i18n="record.prev"></button>
+          <button class="btn ghost small" id="next" data-i18n="record.next"></button>
+          <span class="pos" id="pos">0 / 0</span>
+          <label class="inline-check"><input type="checkbox" id="recFiltered"><span data-i18n="record.filteredView"></span></label>
+          <button class="btn ghost small" id="recCopy" data-i18n="record.copy"></button>
+        </div>
+        <div class="rec-head" id="recHead"></div>
+        <pre id="pre"></pre>
+      </div>
+    </section>
+
+    <!-- ============ export ============ -->
+    <section class="tab-panel" id="panelExport" role="tabpanel">
+      <div class="split">
+        <section class="panel">
+          <div class="head">
+            <h2 data-i18n="fields.title"></h2>
+            <input class="search" id="q" type="search" data-i18n-ph="fields.search" autocomplete="off">
+            <button class="btn ghost small" id="expandAll" data-i18n="fields.expand"></button>
+            <button class="btn ghost small" id="collapseAll" data-i18n="fields.collapse"></button>
+            <button class="btn ghost small" id="resetSel" data-i18n="fields.reset"></button>
+          </div>
+          <div class="tree" id="tree"></div>
+        </section>
+
+        <aside class="side">
+          <section class="stats">
+            <div class="stat"><div class="n" id="sRecords">0</div><div class="l" data-i18n="stats.records"></div></div>
+            <div class="stat"><div class="n" id="sDropped">0</div><div class="l" data-i18n="stats.dropped"></div></div>
+            <div class="stat"><div class="n" id="sBefore">0</div><div class="l" data-i18n="stats.before"></div></div>
+            <div class="stat"><div class="n shrink" id="sAfter">0</div><div class="l" data-i18n="stats.after"></div></div>
+          </section>
+
+          <section class="panel">
+            <div class="opts">
+              <div class="row-label" data-i18n="opts.scope"></div>
+              <label><input type="checkbox" id="optOnlyMatching"><span class="txt" id="onlyMatchingLabel"></span></label>
+              <hr>
+              <div class="row-label" data-i18n="opts.format"></div>
+              <div class="seg" id="fmt">
+                <button data-v="ndjson" class="on" data-i18n="opts.fmtNdjson"></button>
+                <button data-v="array" data-i18n="opts.fmtArray"></button>
+              </div>
+              <label><input type="checkbox" id="optPretty" checked><span class="txt" data-i18n="opts.pretty"></span><span class="delta" id="dPretty"></span></label>
+              <p class="hint-line" id="prettyHint" data-i18n="opts.prettyHint"></p>
+              <hr>
+              <div class="row-label" data-i18n="opts.cleanup"></div>
+              <label><input type="checkbox" id="optNull"><span class="txt" data-i18n="opts.null"></span><span class="delta" id="dNull"></span></label>
+              <label><input type="checkbox" id="optArr"><span class="txt" data-i18n="opts.arrays"></span><span class="delta" id="dArr"></span></label>
+              <label><input type="checkbox" id="optZero"><span class="txt" data-i18n="opts.zeros"></span><span class="delta" id="dZero"></span></label>
+              <label><input type="checkbox" id="optEmpty" checked><span class="txt" data-i18n="opts.emptyObj"></span><span class="delta" id="dEmpty"></span></label>
+              <label>
+                <input type="checkbox" id="optRound"><span class="txt" data-i18n="opts.round"></span>
+                <select id="optDigits"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
+                <span class="delta" id="dRound"></span>
+              </label>
+            </div>
+            <div class="actions">
+              <button class="btn" id="dl" data-i18n="act.download"></button>
+              <button class="btn ghost" id="copy" data-i18n="act.copy"></button>
+            </div>
+          </section>
+
+          <section class="panel presets">
+            <div class="head"><h2 data-i18n="presets.title"></h2></div>
+            <div class="body">
+              <div class="saverow">
+                <input id="presetName" data-i18n-ph="presets.name" autocomplete="off">
+                <button class="btn small" id="savePreset" data-i18n="presets.save"></button>
+              </div>
+              <ul class="plist" id="plist"></ul>
+              <p class="empty-note" id="pEmpty" data-i18n="presets.empty"></p>
+              <p class="store-note" id="storeNote"></p>
+              <details class="raw">
+                <summary data-i18n="presets.raw"></summary>
+                <textarea id="recipe" spellcheck="false" placeholder="report.systemLoad&#10;report.tools.sharing"></textarea>
+                <div class="raw-actions">
+                  <button class="btn ghost small" id="applyRecipe" data-i18n="presets.applyRaw"></button>
+                </div>
+              </details>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
